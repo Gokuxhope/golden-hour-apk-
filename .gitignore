@@ -7,3 +7,4 @@ android/.idea/
 android/app/release/
 *.log
 .DS_Store
+tests/e2e/out/
