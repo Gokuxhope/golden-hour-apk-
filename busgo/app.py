@@ -9,10 +9,10 @@ routes (/search, /trip/<id>/seats, /booking/<pnr>) let you check the
 Python logic in the browser until then.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from functools import wraps
 
-from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
 
 import data
 import logic
@@ -98,22 +98,67 @@ def logout():
 # Pages
 # ---------------------------------------------------------------------------
 
+def search_form_context(source=None, destination=None, travel_date=None):
+    """Values that pre-fill the search form (shared by the landing and results pages)."""
+    user = current_user()
+    source = source if source in data.CITIES else (user["city"] if user else "Bengaluru")
+    if destination not in data.CITIES or destination == source:
+        options = logic.destinations_from(source)
+        destination = "Goa" if "Goa" in options else options[0]
+    first, last = logic.booking_window()
+    if not travel_date or not first.isoformat() <= travel_date <= last.isoformat():
+        travel_date = (first + timedelta(days=1)).isoformat()
+    return {
+        "cities": logic.list_cities(),
+        "form": {"source": source, "destination": destination, "date": travel_date},
+        "window": {"min": first.isoformat(), "max": last.isoformat()},
+        "quick_dates": logic.quick_dates(),
+    }
+
+
 @app.route("/")
 def index():
-    return render_template("index.html", cities=logic.list_cities(), popular=logic.popular_routes(),
-                           trip_count=len(logic.db["trips"]))
+    args = request.args
+    context = search_form_context(args.get("source"), args.get("destination"), args.get("date"))
+    return render_template("index.html", popular=logic.popular_routes(), stats=logic.home_stats(),
+                           tomorrow=(date.today() + timedelta(days=1)).isoformat(), **context)
 
 
 @app.route("/search")
 def search():
-    source = request.args.get("source", "Bengaluru")
-    destination = request.args.get("destination", "Mysuru")
-    travel_date = request.args.get("date") or (date.today() + timedelta(days=1)).isoformat()
-    return jsonify(logic.search_buses(source, destination, travel_date))
+    source = request.args.get("source", "")
+    destination = request.args.get("destination", "")
+    travel_date = request.args.get("date", "")
+    ok, error = logic.validate_search(source, destination, travel_date)
+    if not ok:
+        flash(error, "error")
+        return redirect(url_for("index", source=source, destination=destination, date=travel_date))
+
+    results = logic.search_buses(source, destination, travel_date)
+    fares = [t["base_fare"] for t in results]
+    return render_template(
+        "results.html",
+        results=results,
+        calendar=logic.fare_calendar(source, destination, travel_date),
+        date_label=datetime.strptime(travel_date, "%Y-%m-%d").strftime("%A, %d %B"),
+        slots={t["slot"] for t in results},
+        fare_min=min(fares, default=0),
+        fare_max=max(fares, default=0),
+        served=destination in logic.destinations_from(source),
+        alternatives=logic.destinations_from(source),
+        **search_form_context(source, destination, travel_date),
+    )
 
 
 @app.route("/trip/<trip_id>/seats")
 def seats(trip_id):
+    if not logic.get_trip(trip_id):
+        abort(404)
+    return render_template("placeholder.html", title="Seat selection", phase="Phase 5", page_icon="seat")
+
+
+@app.route("/api/trip/<trip_id>/seats")
+def api_seats(trip_id):
     seat_map = logic.get_seat_map(trip_id)
     if not seat_map:
         return jsonify(error="Trip not found"), 404

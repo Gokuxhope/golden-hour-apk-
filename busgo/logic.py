@@ -158,7 +158,113 @@ def search_buses(source, destination, travel_date, now=None):
             if not view["departed"]:
                 results.append(view)
     results.sort(key=lambda t: t["depart"])
+    add_highlights(results)
     return results
+
+
+def add_highlights(results):
+    """
+    Label the stand-out buses in a result list so the page can show badges:
+    cheapest fare, shortest journey, best rating, and "filling fast"
+    (8 or fewer seats left).
+    """
+    for trip in results:
+        trip["highlights"] = []
+    if len(results) > 1:
+        min(results, key=lambda t: t["base_fare"])["highlights"].append("Cheapest")
+        min(results, key=lambda t: t["duration_min"])["highlights"].append("Fastest")
+        max(results, key=lambda t: t["bus"]["rating"])["highlights"].append("Top rated")
+    for trip in results:
+        if 0 < trip["seats_left"] <= 8:
+            trip["highlights"].append("Filling fast")
+
+
+def booking_window(today=None):
+    """First and last day a ticket can be booked for (today .. 13 days ahead)."""
+    today = today or date.today()
+    return today, today + timedelta(days=data.FUTURE_DAYS - 1)
+
+
+def validate_search(source, destination, travel_date):
+    """Check the search form. Returns (ok, error message)."""
+    if source not in data.CITIES or destination not in data.CITIES:
+        return False, "Please choose both a From and a To city."
+    if source == destination:
+        return False, "From and To can't be the same city."
+    try:
+        day = datetime.strptime(travel_date or "", "%Y-%m-%d").date()
+    except ValueError:
+        return False, "Please pick a valid travel date."
+    first, last = booking_window()
+    if day < first:
+        return False, "That date has already passed — please pick today or later."
+    if day > last:
+        return False, f"Bookings are open up to {last:%d %b} ({data.FUTURE_DAYS} days ahead)."
+    return True, ""
+
+
+def destinations_from(source):
+    """Cities with a direct bus from `source` (used for defaults and 'no buses' suggestions)."""
+    found = set()
+    for a, b, *_ in data.ROUTES:
+        if a == source:
+            found.add(b)
+        elif b == source:
+            found.add(a)
+    return sorted(found)
+
+
+def fare_calendar(source, destination, travel_date, days=7):
+    """
+    A strip of nearby dates with the cheapest fare on each day, so the user
+    can jump to a cheaper day. The strip stays inside the booking window.
+    """
+    selected = datetime.strptime(travel_date, "%Y-%m-%d").date()
+    first, last = booking_window()
+    start = max(first, min(selected - timedelta(days=3), last - timedelta(days=days - 1)))
+    strip = []
+    for i in range(days):
+        day = start + timedelta(days=i)
+        if day > last:
+            break
+        trips = search_buses(source, destination, day.isoformat())
+        strip.append({
+            "date": day.isoformat(),
+            "weekday": day.strftime("%a"),
+            "day": day.day,
+            "month": day.strftime("%b"),
+            "min_fare": min((t["base_fare"] for t in trips), default=None),
+            "count": len(trips),
+            "selected": day == selected,
+        })
+    return strip
+
+
+def quick_dates(today=None):
+    """Shortcut buttons under the date field: Today, Tomorrow and the coming Friday."""
+    today = today or date.today()
+    friday = today + timedelta(days=(4 - today.weekday()) % 7 or 7)
+    options = [("Today", today), ("Tomorrow", today + timedelta(days=1))]
+    if friday > today + timedelta(days=1):
+        options.append((f"Fri {friday.day} {friday:%b}", friday))
+    return [{"label": label, "date": day.isoformat()} for label, day in options]
+
+
+def home_stats(now=None):
+    """Headline numbers for the landing page, counted from the live trip data."""
+    now = now or datetime.now()
+    upcoming = [t for t in db["trips"].values() if departure_time(t) > now]
+    seats_free = sum(len(data.all_seat_ids(data.get_bus(t["bus_id"])["layout"])) - len(t["booked_seats"])
+                     for t in upcoming)
+    return {
+        "cities": len(data.CITIES),
+        "operators": len(data.BUSES),
+        "days": data.FUTURE_DAYS,
+        "routes": len(data.ROUTES) * 2,
+        "trips": len(upcoming),
+        "seats_free": seats_free,
+        "rating": round(sum(b["rating"] for b in data.BUSES) / len(data.BUSES), 1),
+    }
 
 
 def popular_routes():

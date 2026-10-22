@@ -218,6 +218,179 @@
     els.forEach(function (el) { io.observe(el); });
   }
 
+  /* ----------------------------------------------------------- search form */
+  $all("[data-search-form]").forEach(function (form) {
+    var from = $("[data-from]", form);
+    var to = $("[data-to]", form);
+    var dateInput = $("[data-date]", form);
+    var swap = $("[data-swap]", form);
+    var turn = 0;
+
+    swap.addEventListener("click", function () {
+      var tmp = from.value;
+      from.value = to.value;
+      to.value = tmp;
+      turn += 180;
+      swap.style.setProperty("--turn", turn + "deg");
+      [from, to].forEach(function (s) {
+        s.classList.remove("is-swapped");
+        void s.offsetWidth; // restart the animation
+        s.classList.add("is-swapped");
+      });
+    });
+
+    var quick = $all("[data-quick-date]", form);
+    function syncQuick() {
+      quick.forEach(function (b) { b.classList.toggle("is-on", b.dataset.quickDate === dateInput.value); });
+    }
+    quick.forEach(function (b) {
+      b.addEventListener("click", function () { dateInput.value = b.dataset.quickDate; syncQuick(); });
+    });
+    dateInput.addEventListener("change", syncQuick);
+
+    form.addEventListener("submit", function (e) {
+      if (from.value === to.value) {
+        e.preventDefault();
+        toast("From and To can't be the same city.", "error");
+        return;
+      }
+      var btn = $(".search-submit", form);
+      btn.classList.add("is-loading");
+      document.body.classList.add("is-leaving");
+    });
+  });
+
+  /* ------------------------------------------- results: loading + filters */
+  var results = $("[data-results]");
+  if (results) {
+    var cards = $all(".bus-card:not(.skeleton-card)", results);
+    var emptyMsg = $("[data-filter-empty]", results);
+    var countEl = $("[data-visible-count]");
+    var priceInput = $("[data-price]");
+    var priceLabel = $("[data-price-label]");
+    var state = { ac: false, sleeper: false, seater: false, slots: [], sort: "depart" };
+
+    if (countEl) countEl.dataset.current = cards.length;
+
+    // Restart the staggered entrance on whichever cards are visible.
+    function stagger(list) {
+      list.forEach(function (card, i) {
+        card.classList.remove("reveal");
+        card.style.setProperty("--i", i);
+      });
+      void results.offsetWidth;
+      list.forEach(function (card) { card.classList.add("reveal"); });
+    }
+
+    function sortKey(card) {
+      var d = card.dataset;
+      if (state.sort === "price") return +d.fare;
+      if (state.sort === "duration") return +d.duration;
+      if (state.sort === "rating") return -d.rating;
+      return d.depart;
+    }
+
+    function apply() {
+      var maxPrice = priceInput ? +priceInput.value : Infinity;
+      var visible = [];
+      cards.forEach(function (card) {
+        var d = card.dataset;
+        var ok = true;
+        if (state.ac && d.ac !== "1") ok = false;
+        if (state.sleeper !== state.seater) {          // only one of the two chosen
+          if (state.sleeper && d.sleeper !== "1") ok = false;
+          if (state.seater && d.sleeper === "1") ok = false;
+        }
+        if (state.slots.length && state.slots.indexOf(d.slot) === -1) ok = false;
+        if (+d.fare > maxPrice) ok = false;
+        card.hidden = !ok;
+        if (ok) visible.push(card);
+      });
+
+      var sorted = cards.slice().sort(function (a, b) {
+        var ka = sortKey(a), kb = sortKey(b);
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+      sorted.forEach(function (card) { results.insertBefore(card, emptyMsg); });
+      visible.sort(function (a, b) { return sorted.indexOf(a) - sorted.indexOf(b); });
+
+      stagger(visible);
+      emptyMsg.hidden = visible.length > 0;
+      if (countEl) animateNumber(countEl, visible.length, 500);
+    }
+
+    function setPressed(btn, on) {
+      btn.classList.toggle("is-on", on);
+      btn.setAttribute("aria-pressed", String(on));
+    }
+
+    $all("[data-filter]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var key = btn.dataset.filter;
+        state[key] = !state[key];
+        setPressed(btn, state[key]);
+        apply();
+      });
+    });
+
+    $all("[data-filters] [data-slot]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var slot = btn.dataset.slot;
+        var at = state.slots.indexOf(slot);
+        if (at === -1) state.slots.push(slot); else state.slots.splice(at, 1);
+        setPressed(btn, at === -1);
+        apply();
+      });
+    });
+
+    $all("[data-sort]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        state.sort = btn.dataset.sort;
+        $all("[data-sort]").forEach(function (b) { b.classList.toggle("is-on", b === btn); });
+        apply();
+      });
+    });
+
+    if (priceInput) {
+      var pending = null;
+      var paintTrack = function () {
+        var pct = (priceInput.value - priceInput.min) / ((priceInput.max - priceInput.min) || 1) * 100;
+        priceInput.style.setProperty("--fill", pct + "%");
+        priceLabel.textContent = "₹" + inrFormatter.format(+priceInput.value);
+      };
+      paintTrack();
+      priceInput.addEventListener("input", function () {
+        paintTrack();
+        clearTimeout(pending);
+        pending = setTimeout(apply, 120);
+      });
+    }
+
+    var clear = $("[data-clear-filters]");
+    if (clear) {
+      clear.addEventListener("click", function () {
+        state = { ac: false, sleeper: false, seater: false, slots: [], sort: state.sort };
+        $all("[data-filter], [data-filters] [data-slot]").forEach(function (b) { setPressed(b, false); });
+        if (priceInput) { priceInput.value = priceInput.max; priceInput.dispatchEvent(new Event("input")); }
+        apply();
+      });
+    }
+
+    // Fake network delay: show skeleton shimmer for 600ms, then the cards.
+    setTimeout(function () {
+      results.classList.remove("is-loading");
+      stagger(cards);
+    }, reduceMotion ? 0 : 600);
+  }
+
+  var modifyToggle = $("[data-modify-toggle]");
+  if (modifyToggle) {
+    modifyToggle.addEventListener("click", function () {
+      var open = $("[data-modify]").classList.toggle("is-open");
+      modifyToggle.setAttribute("aria-expanded", String(open));
+    });
+  }
+
   /* ------------------------------------------------------------------ init */
   function init(root) {
     $all("[data-tilt]", root).forEach(bindTilt);

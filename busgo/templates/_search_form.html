@@ -1,0 +1,60 @@
+{#
+  Search form shared by the landing page (big card) and the results page (compact bar).
+  Expects: cities, form = {source, destination, date}, window = {min, max}, compact (bool)
+#}
+{% from "_macros.html" import icon %}
+<form class="search-card {{ 'search-compact' if compact }}" action="{{ url_for('search') }}" method="get" data-search-form>
+  <div class="search-fields">
+    <label class="field field-from">
+      <span class="field-label">From</span>
+      <span class="input-wrap">
+        {{ icon('pin', 20) }}
+        <select class="select" name="source" data-from required>
+          {% for city in cities %}
+            <option value="{{ city }}" {{ 'selected' if city == form.source }}>{{ city }}</option>
+          {% endfor %}
+        </select>
+      </span>
+    </label>
+
+    <button type="button" class="swap-btn" data-swap aria-label="Swap From and To" title="Swap cities">
+      {{ icon('swap', 20) }}
+    </button>
+
+    <label class="field field-to">
+      <span class="field-label">To</span>
+      <span class="input-wrap">
+        {{ icon('route', 20) }}
+        <select class="select" name="destination" data-to required>
+          {% for city in cities %}
+            <option value="{{ city }}" {{ 'selected' if city == form.destination }}>{{ city }}</option>
+          {% endfor %}
+        </select>
+      </span>
+    </label>
+
+    <label class="field field-date">
+      <span class="field-label">Travel date</span>
+      <span class="input-wrap">
+        {{ icon('calendar', 20) }}
+        <input class="input" type="date" name="date" value="{{ form.date }}" min="{{ window.min }}" max="{{ window.max }}" required data-date>
+      </span>
+    </label>
+
+    <button class="btn btn-primary {{ 'btn-lg' if not compact }} search-submit" type="submit">
+      {{ icon('search', 20) }}<span>{{ 'Search' if compact else 'Search buses' }}</span>
+    </button>
+  </div>
+
+  {% if not compact %}
+    <div class="search-extra">
+      <div class="quick-dates" role="group" aria-label="Quick dates">
+        <span class="subtle">Quick pick</span>
+        {% for q in quick_dates %}
+          <button type="button" class="pill {{ 'is-on' if q.date == form.date }}" data-quick-date="{{ q.date }}">{{ q.label }}</button>
+        {% endfor %}
+      </div>
+      <span class="search-note">{{ icon('shield', 16) }} 90% refund when you cancel 24h+ before departure</span>
+    </div>
+  {% endif %}
+</form>

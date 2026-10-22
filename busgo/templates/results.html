@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}{{ form.source }} to {{ form.destination }}{% endblock %}
+
+{% set amenity_labels = {
+  'wifi': 'Wi-Fi', 'charging': 'Charging point', 'water': 'Water bottle',
+  'blanket': 'Blanket', 'snacks': 'Snacks', 'tracking': 'Live tracking'
+} %}
+{% set highlight_tone = {'Cheapest': 'green', 'Fastest': 'cyan', 'Top rated': 'amber', 'Filling fast': 'pink'} %}
+
+{% block content %}
+<section class="container results-page">
+
+  {# ---- Route header + modify search ---- #}
+  <header class="results-head reveal" style="--i: 0">
+    <div>
+      <a href="{{ url_for('index', source=form.source, destination=form.destination, date=form.date) }}" class="back-link">{{ icon('arrow-left', 16) }} New search</a>
+      <h1 class="results-title">
+        <span>{{ form.source }}</span>
+        <span class="results-title-to"><span class="results-title-arrow">{{ icon('arrow-right', 26) }}</span>{{ form.destination }}</span>
+      </h1>
+      <p class="muted results-meta">{{ icon('calendar', 16) }} {{ date_label }}
+        <span class="dot-sep"></span>
+        {% if results %}
+          <span><strong data-visible-count>{{ results|length }}</strong> of {{ results|length }} bus{{ 'es' if results|length != 1 }}</span>
+        {% else %}
+          <span>No buses</span>
+        {% endif %}
+      </p>
+    </div>
+    <button class="btn btn-ghost btn-sm modify-toggle" type="button" data-modify-toggle aria-expanded="false">{{ icon('search', 16) }} Modify</button>
+  </header>
+
+  <div class="glass modify-bar reveal" style="--i: 1" data-modify>
+    {% set compact = true %}
+    {% include "_search_form.html" %}
+  </div>
+
+  {# ---- Date strip: nearby days with their cheapest fare ---- #}
+  {% if served %}
+  <nav class="date-strip reveal" style="--i: 2" aria-label="Nearby dates">
+    {% for d in calendar %}
+      <a class="date-chip {{ 'is-on' if d.selected }} {{ 'is-empty' if not d.count }}"
+         href="{{ url_for('search', source=form.source, destination=form.destination, date=d.date) }}"
+         {% if d.selected %}aria-current="date"{% endif %}>
+        <span class="date-chip-day">{{ d.weekday }}</span>
+        <span class="date-chip-num">{{ d.day }} <small>{{ d.month }}</small></span>
+        <span class="date-chip-fare">{{ '₹' ~ (d.min_fare|inr) if d.min_fare else 'No buses' }}</span>
+      </a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+
+  {% if results %}
+    {# ---- Filters (live, in the browser) ---- #}
+    <div class="filters reveal" style="--i: 3" data-filters>
+      <div class="filter-row" role="group" aria-label="Filters">
+        <button type="button" class="pill" data-filter="ac" aria-pressed="false">{{ icon('snow', 15) }} AC</button>
+        <button type="button" class="pill" data-filter="sleeper" aria-pressed="false">{{ icon('blanket', 15) }} Sleeper</button>
+        <button type="button" class="pill" data-filter="seater" aria-pressed="false">{{ icon('seat', 15) }} Seater</button>
+        <span class="filter-sep" aria-hidden="true"></span>
+        {% for slot, ico, label in [('morning', 'sunrise', 'Morning'), ('afternoon', 'sun', 'Afternoon'), ('evening', 'sunset', 'Evening'), ('night', 'moon', 'Night')] %}
+          <button type="button" class="pill" data-slot="{{ slot }}" aria-pressed="false" {% if slot not in slots %}disabled{% endif %}>{{ icon(ico, 15) }} {{ label }}</button>
+        {% endfor %}
+      </div>
+      <div class="filter-row filter-row-2">
+        <label class="price-filter">
+          <span class="subtle">Max price</span>
+          <input type="range" min="{{ fare_min }}" max="{{ fare_max }}" step="10" value="{{ fare_max }}" data-price {% if fare_min == fare_max %}disabled{% endif %}>
+          <strong class="mono" data-price-label>₹{{ fare_max|inr }}</strong>
+        </label>
+        <div class="sort" role="group" aria-label="Sort by">
+          <span class="subtle">Sort</span>
+          <button type="button" class="seg is-on" data-sort="depart">Departure</button>
+          <button type="button" class="seg" data-sort="price">Price</button>
+          <button type="button" class="seg" data-sort="duration">Fastest</button>
+          <button type="button" class="seg" data-sort="rating">Rating</button>
+        </div>
+      </div>
+    </div>
+
+    {# ---- Results list. Skeletons show for 600ms first (fake loading). ---- #}
+    <div class="results is-loading" data-results>
+      <div class="skeletons" aria-hidden="true">
+        {% for _ in range([results|length, 3]|min) %}
+          <div class="bus-card skeleton-card glass">
+            <div class="sk sk-title"></div><div class="sk sk-line"></div>
+            <div class="sk-row"><div class="sk sk-block"></div><div class="sk sk-track"></div><div class="sk sk-block"></div></div>
+            <div class="sk sk-line short"></div>
+          </div>
+        {% endfor %}
+      </div>
+
+      {% for t in results %}
+        <article class="bus-card glass" data-tilt="1.5"
+                 data-ac="{{ 1 if t.is_ac else 0 }}" data-sleeper="{{ 1 if t.is_sleeper else 0 }}" data-slot="{{ t.slot }}"
+                 data-fare="{{ t.base_fare }}" data-duration="{{ t.duration_min }}" data-depart="{{ t.depart }}" data-rating="{{ t.bus.rating }}">
+          <div class="bus-main">
+            <div class="bus-op">
+              <div class="bus-badges">
+                <span class="badge {{ 'badge-violet' if t.is_sleeper else 'badge-cyan' }}">
+                  {{ icon('snow' if t.is_ac else 'sun', 13) }} {{ t.bus.type }}
+                </span>
+                {% for h in t.highlights %}<span class="badge badge-{{ highlight_tone[h] }}">{{ h }}</span>{% endfor %}
+              </div>
+              <h2 class="bus-name">{{ t.bus.name }}</h2>
+              <p class="bus-model subtle">{{ t.bus.model }}</p>
+              <span class="rating"><span class="rating-star">{{ icon('star', 13, fill=true) }} {{ t.bus.rating }}</span><span class="subtle">{{ t.bus.reviews|inr }} ratings</span></span>
+            </div>
+
+            <div class="bus-time">
+              <div class="time-point">
+                <strong class="time">{{ t.depart }}</strong>
+                <span class="subtle">{{ t.source }}</span>
+              </div>
+              <div class="journey">
+                <span class="journey-dur">{{ icon('clock', 13) }} {{ t.duration }}</span>
+                <span class="track" aria-hidden="true">
+                  <span class="track-line"></span>
+                  <span class="track-bus" style="animation-delay: -{{ loop.index0 * 1.7 }}s"><span>{{ icon('bus', 18) }}</span></span>
+                </span>
+                <span class="journey-type subtle">{{ 'Overnight' if t.next_day else 'Same day' }}</span>
+              </div>
+              <div class="time-point time-point-end">
+                <strong class="time">{{ t.arrive }}{% if t.next_day %}<sup>+1</sup>{% endif %}</strong>
+                <span class="subtle">{{ t.destination }}</span>
+              </div>
+            </div>
+
+            <div class="bus-price">
+              <div>
+                <span class="fare">₹{{ t.base_fare|inr }}</span>
+                <span class="subtle fare-unit">per seat</span>
+              </div>
+              {% set tone = 'low' if t.seats_left <= 8 else ('mid' if t.seats_left <= 15 else 'high') %}
+              <span class="seats-left seats-{{ tone }}">{{ icon('seat', 14) }} {{ t.seats_left }} seat{{ 's' if t.seats_left != 1 }} left</span>
+              <a class="btn btn-primary btn-block" href="{{ url_for('seats', trip_id=t.id) }}">Select seats {{ icon('arrow-right', 18, 'icon-arrow') }}</a>
+            </div>
+          </div>
+
+          <footer class="bus-foot">
+            <ul class="amenities" aria-label="Amenities">
+              {% for a in t.bus.amenities %}
+                <li title="{{ amenity_labels[a] }}">{{ icon(a, 16) }}<span>{{ amenity_labels[a] }}</span></li>
+              {% endfor %}
+            </ul>
+            {% if t.ladies_seats|length %}
+              <span class="ladies-note">{{ icon('female', 14) }} {{ t.ladies_seats|length }} ladies seats</span>
+            {% endif %}
+          </footer>
+        </article>
+      {% endfor %}
+
+      <div class="state filter-empty" data-filter-empty hidden>
+        <div class="state-icon">{{ icon('filter', 30) }}</div>
+        <h2>No buses match these filters</h2>
+        <p class="muted">Try removing a filter or raising the max price.</p>
+        <button type="button" class="btn btn-ghost" data-clear-filters>{{ icon('x', 16) }} Clear filters</button>
+      </div>
+    </div>
+    <noscript><style>.results .skeletons { display: none; } .results.is-loading .bus-card { display: block; }</style></noscript>
+
+  {% else %}
+    {# ---- Nothing on this route / date ---- #}
+    <div class="state glass empty-card reveal" style="--i: 3">
+      <div class="state-icon">{{ icon('bus', 34) }}</div>
+      {% if served %}
+        <h2>No more buses on {{ date_label }}</h2>
+        <p class="muted">Every bus for this day has already left or the day has no trips. Try a nearby date from the strip above.</p>
+      {% else %}
+        <h2>No direct buses {{ form.source }} → {{ form.destination }}</h2>
+        <p class="muted">BusGo doesn't run this route yet. From {{ form.source }} you can travel to:</p>
+        <div class="chips chips-center">
+          {% for city in alternatives %}
+            <a class="route-chip" href="{{ url_for('search', source=form.source, destination=city, date=form.date) }}">
+              <span class="route-chip-cities">{{ form.source }} <span class="route-arrow">{{ icon('arrow-right', 14) }}</span> {{ city }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

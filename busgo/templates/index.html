@@ -1,42 +1,56 @@
 {% extends "base.html" %}
 {% block title %}Book bus tickets{% endblock %}
+{% block main_class %}page-home{% endblock %}
 
 {% block content %}
-<section class="container">
+<section class="container home">
   <div class="hero">
-    <span class="eyebrow reveal" style="--i: 0"><span class="dot">{{ icon('bus', 13) }}</span>9 cities · 10 operators · 14 days of trips</span>
+    <span class="eyebrow reveal" style="--i: 0"><span class="dot">{{ icon('bus', 13) }}</span>{{ stats.cities }} cities · {{ stats.operators }} operators · {{ stats.days }} days of trips</span>
     <h1 class="hero-title reveal" style="--i: 1">Travel India, <span class="text-gradient">beautifully.</span></h1>
-    <p class="hero-sub reveal" style="--i: 2">Search buses, pick your seat and get a ticket in under a minute. The search card arrives in Phase 4 — below is a preview of the design system.</p>
+    <p class="hero-sub reveal" style="--i: 2">Pick your exact seat on night sleepers and Volvo coaches between nine cities. Booked in under a minute, cancelled in a tap.</p>
   </div>
 
-  <div class="preview-grid">
-    <div class="card reveal" style="--i: 3" data-tilt>
-      <span class="badge badge-violet">{{ icon('sparkles', 13) }} Buttons</span>
-      <h3 style="margin-top: 14px">Lift, glow &amp; ripple</h3>
-      <p class="muted">Hover to lift, press to squash, click for a ripple.</p>
-      <div class="row">
-        <button class="btn btn-primary" type="button">Search buses {{ icon('arrow-right', 18, 'icon-arrow') }}</button>
-        <button class="btn btn-ghost" type="button">Ghost</button>
-      </div>
+  <div class="search-shell reveal" style="--i: 3">
+    <div class="search-glow" aria-hidden="true"></div>
+    <div class="glass search-glass">
+      {% set compact = false %}
+      {% include "_search_form.html" %}
     </div>
+  </div>
 
-    <div class="card reveal" style="--i: 4" data-tilt>
-      <span class="badge badge-cyan">{{ icon('info', 13) }} Toasts</span>
-      <h3 style="margin-top: 14px">Glass notifications</h3>
-      <p class="muted">Slide in from the top-right, pause on hover.</p>
-      <div class="row">
-        <button class="btn btn-ghost btn-sm" type="button" onclick="BusGo.toast('Seats locked for 10 minutes.', 'success')">{{ icon('check-circle', 16) }} Success</button>
-        <button class="btn btn-ghost btn-sm" type="button" onclick="BusGo.toast('Seat 14 was just booked by someone else.', 'error')">{{ icon('alert', 16) }} Error</button>
-        <button class="btn btn-ghost btn-sm" type="button" onclick="BusGo.toast('Fares are 10% higher on weekends.', 'info')">{{ icon('info', 16) }} Info</button>
-      </div>
+  <div class="popular">
+    <h2 class="section-label reveal" style="--i: 5">{{ icon('trending', 16) }} Popular routes</h2>
+    <div class="chips">
+      {% for r in popular %}
+        <a class="route-chip reveal" style="--i: {{ loop.index + 5 }}"
+           href="{{ url_for('search', source=r.source, destination=r.destination, date=tomorrow) }}">
+          <span class="route-chip-cities">{{ r.source }} <span class="route-arrow">{{ icon('arrow-right', 14) }}</span> {{ r.destination }}</span>
+          {% if r.from_fare %}<span class="route-chip-fare">from ₹{{ r.from_fare|inr }}</span>{% endif %}
+        </a>
+      {% endfor %}
     </div>
+  </div>
 
-    <div class="card reveal" style="--i: 5" data-tilt>
-      <span class="badge badge-pink">{{ icon('trending', 13) }} Counters</span>
-      <h3 style="margin-top: 14px">Live from Python</h3>
-      <p class="muted">Trips scheduled in data.json right now:</p>
-      <div class="stat-num text-gradient mono" data-count="{{ trip_count }}">0</div>
-    </div>
+  <div class="features">
+    {% set features = [
+      ('seat', 'violet', 'Choose your exact seat', 'Live seat maps for sleepers and seaters. Window, aisle, lower or upper berth — your call.'),
+      ('female', 'pink', 'Ladies seats', 'Seats marked for women travellers are reserved for female passengers only.'),
+      ('undo', 'cyan', 'Refunds in a tap', '90% back if you cancel 24 hours ahead, 50% up to 6 hours before departure.'),
+    ] %}
+    {% for ico, tone, title, text in features %}
+      <article class="feature card reveal" style="--i: {{ loop.index + 11 }}" data-tilt="5">
+        <span class="feature-icon tone-{{ tone }}">{{ icon(ico, 22) }}</span>
+        <h3>{{ title }}</h3>
+        <p class="muted">{{ text }}</p>
+      </article>
+    {% endfor %}
+  </div>
+
+  <div class="stats-strip glass reveal" style="--i: 15">
+    <div><strong class="mono" data-count="{{ stats.trips }}">0</strong><span>trips scheduled</span></div>
+    <div><strong class="mono" data-count="{{ stats.seats_free }}">0</strong><span>seats open right now</span></div>
+    <div><strong class="mono" data-count="{{ stats.routes }}">0</strong><span>routes, both ways</span></div>
+    <div><strong class="mono" data-count="{{ stats.rating }}" data-decimals="1" data-suffix="★">0</strong><span>average operator rating</span></div>
   </div>
 </section>
 {% endblock %}
