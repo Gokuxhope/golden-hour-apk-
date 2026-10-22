@@ -1,24 +1,27 @@
 """
 app.py - BusGo's web routes.
 
-Each route only reads the request, calls a function in logic.py and returns
-the result. No business rules live here.
+Each route only reads the request, calls a function in logic.py and shows
+the result in a template. No business rules live here.
 
-Phase 2 skeleton: routes return JSON so the Python logic can be checked in
-the browser. Later phases swap these for the real HTML pages.
+Pages still marked "placeholder" are built in later phases; the JSON
+routes (/search, /trip/<id>/seats, /booking/<pnr>) let you check the
+Python logic in the browser until then.
 """
 
 from datetime import date, timedelta
 from functools import wraps
 
-from flask import Flask, jsonify, redirect, request, session, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 
+import data
 import logic
 
 app = Flask(__name__)
 app.secret_key = "busgo-demo-secret"  # mock project: sessions only remember who is logged in
 
 logic.init()
+app.jinja_env.filters["inr"] = logic.format_inr
 
 
 # ---------------------------------------------------------------------------
@@ -29,10 +32,24 @@ def current_user():
     return logic.get_user(session.get("user_id"))
 
 
+@app.context_processor
+def inject_user():
+    """Make `current_user` available in every template (for the navbar)."""
+    return {"current_user": current_user()}
+
+
+def safe_next(url):
+    """Only follow redirects to pages on this site (never to another domain)."""
+    if url and url.startswith("/") and not url.startswith("//"):
+        return url
+    return None
+
+
 def login_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
         if not current_user():
+            flash("Please pick a profile to continue.", "info")
             return redirect(url_for("login", next=request.full_path.rstrip("?")))
         return view(*args, **kwargs)
     return wrapper
@@ -43,38 +60,48 @@ def admin_required(view):
     def wrapper(*args, **kwargs):
         user = current_user()
         if not user or user["role"] != "admin":
+            flash("The dashboard is for the admin profile only.", "error")
             return redirect(url_for("login", next=request.full_path.rstrip("?")))
         return view(*args, **kwargs)
     return wrapper
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# Mock login
 # ---------------------------------------------------------------------------
-
-@app.route("/")
-def index():
-    return jsonify(cities=logic.list_cities(), popular=logic.popular_routes(), user=current_user())
-
 
 @app.route("/login")
 def login():
-    from data import USERS
-    return jsonify(profiles=USERS, next=request.args.get("next"))
+    return render_template("login.html", profiles=data.USERS, next_url=safe_next(request.args.get("next")))
 
 
-@app.route("/login/<user_id>", methods=["GET", "POST"])
+@app.route("/login/<user_id>", methods=["POST"])
 def login_as(user_id):
-    if not logic.get_user(user_id):
+    user = logic.get_user(user_id)
+    if not user:
+        flash("That profile does not exist.", "error")
         return redirect(url_for("login"))
     session["user_id"] = user_id
-    return redirect(request.args.get("next") or url_for("index"))
+    flash(f"Welcome, {user['name'].split()[0]}! You're signed in as {user['role']}.", "success")
+    default = url_for("admin") if user["role"] == "admin" else url_for("index")
+    return redirect(safe_next(request.form.get("next")) or default)
 
 
 @app.route("/logout")
 def logout():
     session.clear()
+    flash("You've been signed out. See you on the road!", "info")
     return redirect(url_for("index"))
+
+
+# ---------------------------------------------------------------------------
+# Pages
+# ---------------------------------------------------------------------------
+
+@app.route("/")
+def index():
+    return render_template("index.html", cities=logic.list_cities(), popular=logic.popular_routes(),
+                           trip_count=len(logic.db["trips"]))
 
 
 @app.route("/search")
@@ -115,7 +142,12 @@ def booking(pnr):
 @app.route("/my-bookings")
 @login_required
 def my_bookings():
-    return jsonify(logic.get_user_bookings(current_user()["id"]))
+    return render_template("placeholder.html", title="My Bookings", phase="Phase 7", page_icon="list")
+
+
+@app.route("/pnr")
+def pnr_status():
+    return render_template("placeholder.html", title="PNR Status", phase="Phase 7", page_icon="ticket")
 
 
 @app.route("/api/refund/<pnr>")
@@ -126,7 +158,7 @@ def api_refund(pnr):
 @app.route("/admin")
 @admin_required
 def admin():
-    return jsonify(logic.get_stats())
+    return render_template("placeholder.html", title="Admin dashboard", phase="Phase 8", page_icon="dashboard")
 
 
 @app.route("/admin/trip/<trip_id>/manifest")
@@ -136,6 +168,11 @@ def manifest(trip_id):
     if not result:
         return jsonify(error="Trip not found"), 404
     return jsonify(result)
+
+
+@app.errorhandler(404)
+def not_found(_error):
+    return render_template("404.html"), 404
 
 
 if __name__ == "__main__":

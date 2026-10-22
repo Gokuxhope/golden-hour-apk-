@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Not found{% endblock %}
+
+{% block content %}
+<section class="container">
+  <div class="state">
+    <div class="state-code text-gradient reveal" style="--i: 0">404</div>
+    <h1 class="page-title reveal" style="--i: 1">Wrong turn</h1>
+    <p class="page-sub reveal" style="--i: 2">{{ message or "This road doesn't lead anywhere. Let's get you back on route." }}</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary reveal" style="--i: 3">{{ icon('home', 18) }} Back to search</a>
+  </div>
+</section>
+{% endblock %}

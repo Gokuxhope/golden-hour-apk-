@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Choose a profile{% endblock %}
+
+{% block content %}
+<section class="container login">
+  <div class="page-head">
+    <span class="eyebrow reveal" style="--i: 0"><span class="dot">{{ icon('sparkles', 13) }}</span>Demo mode — no passwords</span>
+    <h1 class="page-title reveal" style="--i: 1; margin-top: 18px">Who's travelling <span class="text-gradient">today?</span></h1>
+    <p class="page-sub reveal" style="--i: 2">Pick a profile to continue. Passengers can book and manage tickets; the admin sees the operations dashboard.</p>
+  </div>
+
+  <div class="profiles">
+    {% for user in profiles %}
+      <form class="profile-form" method="post" action="{{ url_for('login_as', user_id=user.id) }}">
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+        <button type="submit" class="profile profile-{{ user.id }} glass glass-edge reveal {{ 'is-current' if current_user and current_user.id == user.id }}" style="--i: {{ loop.index + 2 }}" data-tilt="7">
+          <span class="profile-ring">{{ avatar(user, 78) }}</span>
+          <span class="profile-name">{{ user.name }}</span>
+          <span class="profile-tag">{{ user.tagline }}</span>
+          <span class="profile-meta">
+            {% if user.role == 'admin' %}
+              <span class="badge badge-amber">{{ icon('shield', 13) }} Admin</span>
+            {% else %}
+              <span class="badge badge-violet">{{ icon('user', 13) }} Passenger</span>
+            {% endif %}
+            <span class="badge">{{ icon('pin', 13) }} {{ user.city }}</span>
+          </span>
+          <span class="profile-cta">
+            {% if current_user and current_user.id == user.id %}
+              {{ icon('check', 16) }} Signed in — continue
+            {% else %}
+              Continue as {{ user.name.split()[0] }} {{ icon('arrow-right', 16) }}
+            {% endif %}
+          </span>
+        </button>
+      </form>
+    {% endfor %}
+  </div>
+
+  <p class="login-note reveal" style="--i: 7">{{ icon('lock', 15) }} Mock sign-in · bookings are saved to data.json on this computer</p>
+</section>
+{% endblock %}

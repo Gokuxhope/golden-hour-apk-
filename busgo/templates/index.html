@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Book bus tickets{% endblock %}
+
+{% block content %}
+<section class="container">
+  <div class="hero">
+    <span class="eyebrow reveal" style="--i: 0"><span class="dot">{{ icon('bus', 13) }}</span>9 cities · 10 operators · 14 days of trips</span>
+    <h1 class="hero-title reveal" style="--i: 1">Travel India, <span class="text-gradient">beautifully.</span></h1>
+    <p class="hero-sub reveal" style="--i: 2">Search buses, pick your seat and get a ticket in under a minute. The search card arrives in Phase 4 — below is a preview of the design system.</p>
+  </div>
+
+  <div class="preview-grid">
+    <div class="card reveal" style="--i: 3" data-tilt>
+      <span class="badge badge-violet">{{ icon('sparkles', 13) }} Buttons</span>
+      <h3 style="margin-top: 14px">Lift, glow &amp; ripple</h3>
+      <p class="muted">Hover to lift, press to squash, click for a ripple.</p>
+      <div class="row">
+        <button class="btn btn-primary" type="button">Search buses {{ icon('arrow-right', 18, 'icon-arrow') }}</button>
+        <button class="btn btn-ghost" type="button">Ghost</button>
+      </div>
+    </div>
+
+    <div class="card reveal" style="--i: 4" data-tilt>
+      <span class="badge badge-cyan">{{ icon('info', 13) }} Toasts</span>
+      <h3 style="margin-top: 14px">Glass notifications</h3>
+      <p class="muted">Slide in from the top-right, pause on hover.</p>
+      <div class="row">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="BusGo.toast('Seats locked for 10 minutes.', 'success')">{{ icon('check-circle', 16) }} Success</button>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="BusGo.toast('Seat 14 was just booked by someone else.', 'error')">{{ icon('alert', 16) }} Error</button>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="BusGo.toast('Fares are 10% higher on weekends.', 'info')">{{ icon('info', 16) }} Info</button>
+      </div>
+    </div>
+
+    <div class="card reveal" style="--i: 5" data-tilt>
+      <span class="badge badge-pink">{{ icon('trending', 13) }} Counters</span>
+      <h3 style="margin-top: 14px">Live from Python</h3>
+      <p class="muted">Trips scheduled in data.json right now:</p>
+      <div class="stat-num text-gradient mono" data-count="{{ trip_count }}">0</div>
+    </div>
+  </div>
+</section>
+{% endblock %}

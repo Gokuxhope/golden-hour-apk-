@@ -1,0 +1,116 @@
+{% from "_macros.html" import icon, logo, avatar %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0920">
+  <title>{% block title %}BusGo{% endblock %} · BusGo</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a78bfa'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='40' height='40' rx='12' fill='url(%23g)'/%3E%3Crect x='10' y='9' width='20' height='19' rx='5' fill='none' stroke='white' stroke-width='2.4'/%3E%3Cpath d='M10 19h20' stroke='white' stroke-width='2.4'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+  {# Animated gradient mesh: soft colour blobs drifting behind everything #}
+  <div class="bg-mesh" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+    <span class="blob blob-4"></span>
+    <span class="bg-grain"></span>
+  </div>
+
+  {% set endpoint = request.endpoint or "" %}
+  {% macro nav_link(target, label, ico, match) -%}
+    <a href="{{ url_for(target) }}" class="nav-link {{ 'is-active' if endpoint in match }}">{{ icon(ico, 18) }}<span>{{ label }}</span></a>
+  {%- endmacro %}
+
+  <header class="nav-wrap">
+    <nav class="nav glass" aria-label="Main">
+      <a class="brand" href="{{ url_for('index') }}" aria-label="BusGo home">
+        {{ logo(34) }}<span class="brand-name">Bus<span class="text-gradient">Go</span></span>
+      </a>
+
+      <div class="nav-links" id="nav-links">
+        {{ nav_link('index', 'Search', 'search', ['index', 'search', 'seats', 'passengers', 'payment']) }}
+        {{ nav_link('pnr_status', 'PNR Status', 'ticket', ['pnr_status']) }}
+        {% if current_user %}
+          {{ nav_link('my_bookings', 'My Bookings', 'list', ['my_bookings', 'booking']) }}
+          {% if current_user.role == 'admin' %}
+            {{ nav_link('admin', 'Admin', 'dashboard', ['admin', 'manifest']) }}
+          {% endif %}
+        {% endif %}
+      </div>
+
+      <div class="nav-actions">
+        {% if current_user %}
+          <div class="user-menu" data-dropdown>
+            <button class="user-chip" type="button" aria-haspopup="true" aria-expanded="false" data-dropdown-toggle>
+              {{ avatar(current_user, 32) }}
+              <span class="user-chip-name">{{ current_user.name.split()[0] }}</span>
+              {{ icon('chevron-down', 16, 'chev') }}
+            </button>
+            <div class="dropdown glass-strong" role="menu">
+              <div class="dropdown-head">
+                {{ avatar(current_user, 40) }}
+                <div>
+                  <strong>{{ current_user.name }}</strong>
+                  <small>{{ current_user.email }}</small>
+                </div>
+              </div>
+              <a href="{{ url_for('my_bookings') }}" role="menuitem">{{ icon('list', 18) }} My Bookings</a>
+              {% if current_user.role == 'admin' %}
+                <a href="{{ url_for('admin') }}" role="menuitem">{{ icon('dashboard', 18) }} Admin dashboard</a>
+              {% endif %}
+              <a href="{{ url_for('login') }}" role="menuitem">{{ icon('users', 18) }} Switch profile</a>
+              <a href="{{ url_for('logout') }}" role="menuitem" class="danger">{{ icon('logout', 18) }} Sign out</a>
+            </div>
+          </div>
+        {% else %}
+          <a href="{{ url_for('login', next=request.full_path.rstrip('?') if endpoint != 'login' else None) }}" class="btn btn-primary btn-sm">{{ icon('user', 16) }}<span>Sign in</span></a>
+        {% endif %}
+        <button class="nav-toggle" type="button" aria-label="Open menu" aria-controls="nav-links" aria-expanded="false" data-nav-toggle>
+          {{ icon('menu', 22, 'i-open') }}{{ icon('x', 22, 'i-close') }}
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <main class="page {% block main_class %}{% endblock %}" id="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <span class="brand-sm">{{ logo(22) }} BusGo</span>
+      <span>A BCA Python project · Flask mock — no real payments or tickets.</span>
+    </div>
+  </footer>
+
+  {# Toasts: Flask flash messages become glass notifications (see app.js) #}
+  <div class="toast-stack" id="toast-stack" aria-live="polite">
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+      <div class="toast toast-{{ category if category in ['success', 'error', 'info'] else 'info' }}" role="status">
+        <span class="toast-icon">{{ icon({'success': 'check-circle', 'error': 'alert'}.get(category, 'info'), 20) }}</span>
+        <p>{{ message }}</p>
+        <button class="toast-close" type="button" aria-label="Dismiss">{{ icon('x', 16) }}</button>
+      </div>
+    {% endfor %}
+  </div>
+
+  {# Icon templates JS can clone for client-side toasts #}
+  <template id="toast-icons">
+    <span data-type="success">{{ icon('check-circle', 20) }}</span>
+    <span data-type="error">{{ icon('alert', 20) }}</span>
+    <span data-type="info">{{ icon('info', 20) }}</span>
+    <span data-type="close">{{ icon('x', 16) }}</span>
+  </template>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
