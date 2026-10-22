@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% from "_macros.html" import steps, trip_strip %}
+{% from "_ticket.html" import qr %}
+{% block title %}Payment{% endblock %}
+
+{% block content %}
+<section class="container booking-page">
+  <div class="booking-top reveal" style="--i: 0">
+    <a href="{{ url_for('passengers') }}" class="back-link">{{ icon('arrow-left', 16) }} Edit passengers</a>
+    {{ steps(3) }}
+  </div>
+
+  <div class="glass booking-trip reveal" style="--i: 1">{{ trip_strip(trip) }}</div>
+
+  <form class="seat-layout pay-layout" method="post" data-pay-form>
+    <input type="hidden" name="method" value="UPI" data-pay-method>
+
+    <div class="pay-col">
+      <div class="pay-card glass reveal" style="--i: 2">
+        <div class="pay-head">
+          <h1 class="section-title">Payment</h1>
+          <span class="badge badge-green">{{ icon('lock', 13) }} Mock checkout · no money moves</span>
+        </div>
+
+        <div class="pay-tabs" role="tablist" data-tabs>
+          <span class="pay-tab-indicator" aria-hidden="true"></span>
+          {% for key, ico, label in [('UPI', 'phone-ui', 'UPI'), ('Card', 'card', 'Card'), ('Wallet', 'wallet', 'Wallet')] %}
+            <button type="button" role="tab" class="pay-tab {{ 'is-on' if loop.first }}" data-tab="{{ key }}"
+                    aria-selected="{{ 'true' if loop.first else 'false' }}" aria-controls="panel-{{ key }}">
+              {{ icon(ico, 18) }} {{ label }}
+            </button>
+          {% endfor %}
+        </div>
+
+        {# ---- UPI ---- #}
+        <div class="pay-panel is-on" id="panel-UPI" role="tabpanel" data-panel="UPI">
+          <div class="upi-grid">
+            <div class="upi-form">
+              <label class="field">
+                <span class="field-label">UPI ID</span>
+                <span class="input-wrap">{{ icon('phone-ui', 18) }}<input class="input" name="upi_id" placeholder="yourname@okbank" autocomplete="off" value="{{ current_user.name.split()[0]|lower }}@busgo"></span>
+              </label>
+              <p class="subtle pay-hint">A collect request would be sent to this ID. In this demo any ID works.</p>
+              <ul class="pay-perks">
+                <li>{{ icon('check', 15) }} Instant confirmation</li>
+                <li>{{ icon('check', 15) }} No extra charges</li>
+              </ul>
+            </div>
+            <div class="upi-qr">
+              {{ qr('upi:' ~ draft.trip_id ~ fare.total) }}
+              <span class="subtle">Scan with any UPI app</span>
+            </div>
+          </div>
+        </div>
+
+        {# ---- Card ---- #}
+        <div class="pay-panel" id="panel-Card" role="tabpanel" data-panel="Card" hidden>
+          <div class="card-grid">
+            <div class="cc-scene" aria-hidden="true">
+              <div class="cc" data-cc>
+                <div class="cc-face cc-front">
+                  <div class="cc-top"><span class="cc-chip"></span><span class="cc-brand">BusGo Pay</span></div>
+                  <div class="cc-number" data-cc-number>•••• •••• •••• ••••</div>
+                  <div class="cc-bottom">
+                    <div><small>Card holder</small><span data-cc-name>{{ current_user.name|upper }}</span></div>
+                    <div><small>Expires</small><span data-cc-exp>MM/YY</span></div>
+                  </div>
+                </div>
+                <div class="cc-face cc-back">
+                  <div class="cc-stripe"></div>
+                  <div class="cc-cvv"><small>CVV</small><span data-cc-cvv>•••</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="card-fields">
+              <label class="field cc-field-number">
+                <span class="field-label">Card number</span>
+                <span class="input-wrap">{{ icon('card', 18) }}<input class="input mono" name="card_number" inputmode="numeric" autocomplete="cc-number" placeholder="4242 4242 4242 4242" maxlength="19" data-cc-in="number"></span>
+              </label>
+              <label class="field cc-field-name">
+                <span class="field-label">Name on card</span>
+                <input class="input" name="card_name" autocomplete="cc-name" value="{{ current_user.name }}" data-cc-in="name">
+              </label>
+              <label class="field">
+                <span class="field-label">Expiry</span>
+                <input class="input mono" name="card_exp" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/YY" maxlength="5" data-cc-in="exp">
+              </label>
+              <label class="field">
+                <span class="field-label">CVV</span>
+                <input class="input mono" name="card_cvv" inputmode="numeric" autocomplete="cc-csc" placeholder="•••" maxlength="4" data-cc-in="cvv">
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {# ---- Wallet ---- #}
+        <div class="pay-panel" id="panel-Wallet" role="tabpanel" data-panel="Wallet" hidden>
+          <div class="wallets">
+            {% for name, note, tone in [('BusGo Wallet', 'Balance ₹12,500', 'violet'), ('PaySwift', 'Linked · 98•••45', 'cyan'), ('Kosh Wallet', '2% cashback on travel', 'pink')] %}
+              <label class="wallet">
+                <input type="radio" name="wallet" value="{{ name }}" {{ 'checked' if loop.first }}>
+                <span class="wallet-body">
+                  <span class="feature-icon tone-{{ tone }}">{{ icon('wallet', 20) }}</span>
+                  <span class="wallet-text"><strong>{{ name }}</strong><span class="subtle">{{ note }}</span></span>
+                  <span class="wallet-radio"></span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="summary-col">
+      <div class="summary glass reveal" style="--i: 3">
+        <h2 class="summary-title">Order summary</h2>
+        <ul class="pay-pax">
+          {% for p in draft.passengers %}
+            <li><span class="seat-chip-id">{{ p.seat }}</span><span>{{ p.name|title }}</span><span class="subtle">{{ p.age }} · {{ p.gender[0] }}</span></li>
+          {% endfor %}
+        </ul>
+        <dl class="fare-rows">
+          <div><dt>Base fare <span class="subtle">× {{ fare.seat_count }}</span></dt><dd>₹{{ fare.base_total|inr }}</dd></div>
+          <div><dt>Service fee</dt><dd>₹{{ fare.service_fee|inr }}</dd></div>
+          <div><dt>GST <span class="subtle">({{ fare.gst_rate }}%)</span></dt><dd>₹{{ fare.gst|inr }}</dd></div>
+          <div class="fare-total"><dt>Total</dt><dd>₹{{ fare.total|inr }}</dd></div>
+        </dl>
+        <button class="btn btn-primary btn-lg btn-block pay-btn" type="submit" data-pay-btn>
+          <span class="pay-btn-idle">{{ icon('lock', 18) }} Pay ₹{{ fare.total|inr }}</span>
+          <span class="pay-btn-busy"><span class="spinner"></span> Processing payment…</span>
+        </button>
+        <p class="summary-note subtle">{{ icon('shield', 14) }} Any details work — this is a demo checkout</p>
+      </div>
+    </aside>
+  </form>
+</section>
+{% endblock %}

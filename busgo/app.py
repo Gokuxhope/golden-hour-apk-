@@ -22,6 +22,8 @@ app.secret_key = "busgo-demo-secret"  # mock project: sessions only remember who
 
 logic.init()
 app.jinja_env.filters["inr"] = logic.format_inr
+app.jinja_env.globals["qr_matrix"] = logic.qr_matrix
+app.jinja_env.filters["nice_date"] = lambda iso: datetime.fromisoformat(iso).strftime("%d %b %Y")
 
 
 # ---------------------------------------------------------------------------
@@ -251,10 +253,40 @@ def passengers():
     )
 
 
-@app.route("/payment")
+@app.route("/payment", methods=["GET", "POST"])
 @login_required
 def payment():
-    return render_template("placeholder.html", title="Payment", phase="Phase 6", page_icon="card")
+    draft = get_draft()
+    trip = logic.get_trip(draft["trip_id"]) if draft else None
+    if not trip:
+        flash("Nothing to pay for yet — start by choosing seats.", "info")
+        return redirect(url_for("index"))
+    if not draft.get("passengers"):
+        return redirect(url_for("passengers"))
+    view = logic.trip_view(trip)
+
+    if request.method == "POST":
+        # Mock payment: whatever was typed is accepted. Python does the real work:
+        # book_seats() re-checks the seats and saves the booking.
+        method = request.form.get("method", "UPI")
+        ok, result = logic.book_seats(
+            trip["id"], draft["seats"], draft["passengers"], current_user(),
+            contact=draft["contact"], boarding=draft["boarding"], dropping=draft["dropping"],
+            payment_method=method if method in ("UPI", "Card", "Wallet") else "UPI",
+        )
+        if not ok:
+            flash(result, "error")
+            return redirect(url_for("seats", trip_id=trip["id"]))
+        session.pop("draft", None)
+        session["just_booked"] = result["pnr"]
+        return redirect(url_for("booking", pnr=result["pnr"]))
+
+    return render_template(
+        "payment.html",
+        trip=view,
+        draft=draft,
+        fare=logic.calculate_fare(trip["base_fare"], draft["seats"], view["bus"]["type"]),
+    )
 
 
 @app.route("/api/trip/<trip_id>/seats")
@@ -280,8 +312,10 @@ def api_fare():
 def booking(pnr):
     found = logic.get_booking(pnr)
     if not found:
-        return jsonify(error="PNR not found"), 404
-    return jsonify(logic.booking_view(found))
+        return render_template("404.html", message=f"No booking found with PNR {pnr.upper()}."), 404
+    # Celebrate (checkmark + confetti) only right after paying, not on later visits.
+    celebrate = session.pop("just_booked", None) == found["pnr"]
+    return render_template("success.html", b=logic.booking_view(found), celebrate=celebrate)
 
 
 @app.route("/my-bookings")

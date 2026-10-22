@@ -1,0 +1,89 @@
+{#
+  Ticket card (success page, PNR status). `b` is a booking view from logic.booking_view().
+#}
+{% from "_macros.html" import icon, logo %}
+
+{% macro qr(text, cls="") -%}
+{%- set grid = qr_matrix(text) -%}
+<svg class="qr {{ cls }}" viewBox="-1 -1 {{ grid|length + 2 }} {{ grid|length + 2 }}" shape-rendering="crispEdges" aria-label="Ticket code pattern" role="img">
+  <rect x="-1" y="-1" width="{{ grid|length + 2 }}" height="{{ grid|length + 2 }}" class="qr-bg"/>
+  {%- for row in grid %}{% set r = loop.index0 %}{% for cell in row %}{% if cell %}<rect x="{{ loop.index0 }}" y="{{ r }}" width="1" height="1"/>{% endif %}{% endfor %}{% endfor %}
+</svg>
+{%- endmacro %}
+
+{% macro ticket(b) -%}
+{%- set t = b.trip -%}
+{%- set cancelled = b.status == 'Cancelled' -%}
+<article class="ticket {{ 'is-cancelled' if cancelled }}" id="ticket">
+  <div class="ticket-main">
+    <header class="ticket-head">
+      <span class="brand ticket-brand">{{ logo(28) }}<span>Bus<span class="text-gradient">Go</span></span></span>
+      <span class="ticket-kind subtle">E-ticket</span>
+      {% if cancelled %}
+        <span class="badge badge-red">{{ icon('x', 13) }} Cancelled</span>
+      {% elif b.upcoming %}
+        <span class="badge badge-green">{{ icon('check', 13) }} Confirmed</span>
+      {% else %}
+        <span class="badge">{{ icon('clock', 13) }} Completed</span>
+      {% endif %}
+    </header>
+
+    <div class="ticket-route">
+      <div class="ticket-point">
+        <span class="ticket-time">{{ t.depart }}</span>
+        <strong>{{ t.source }}</strong>
+        <span class="subtle">{{ b.boarding.time }} · {{ b.boarding.name }}</span>
+      </div>
+      <div class="ticket-mid">
+        <span class="subtle">{{ t.duration }}</span>
+        <span class="ticket-line">{{ icon('bus', 18) }}</span>
+        <span class="subtle">{{ t.date_label }}</span>
+      </div>
+      <div class="ticket-point ticket-point-end">
+        <span class="ticket-time">{{ t.arrive }}{% if t.next_day %}<sup>+1</sup>{% endif %}</span>
+        <strong>{{ t.destination }}</strong>
+        <span class="subtle">{{ b.dropping.time }} · {{ b.dropping.name }}</span>
+      </div>
+    </div>
+
+    <dl class="ticket-facts">
+      <div><dt>Operator</dt><dd>{{ t.bus.name }}</dd></div>
+      <div><dt>Bus type</dt><dd>{{ t.bus.type }}</dd></div>
+      <div><dt>Booked on</dt><dd>{{ b.booked_at|nice_date }}</dd></div>
+      <div><dt>Paid via</dt><dd>{{ b.payment_method }}</dd></div>
+    </dl>
+
+    <table class="ticket-pax">
+      <thead><tr><th>Seat</th><th>Passenger</th><th>Age</th><th>Gender</th></tr></thead>
+      <tbody>
+        {% for p in b.passengers %}
+          <tr><td><span class="seat-tag">{{ p.seat }}</span></td><td>{{ p.name }}</td><td>{{ p.age }}</td><td>{{ p.gender }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <dl class="fare-rows ticket-fare">
+      <div><dt>Base fare <span class="subtle">₹{{ b.fare.base_fare|inr }} × {{ b.fare.seat_count }}</span></dt><dd>₹{{ b.fare.base_total|inr }}</dd></div>
+      <div><dt>Service fee</dt><dd>₹{{ b.fare.service_fee|inr }}</dd></div>
+      <div><dt>GST <span class="subtle">({{ b.fare.gst_rate }}%)</span></dt><dd>₹{{ b.fare.gst|inr }}</dd></div>
+      {% if cancelled and b.refund %}
+        <div class="refund-row"><dt>Refunded <span class="subtle">({{ b.refund.percent }}%)</span></dt><dd>− ₹{{ b.refund.amount|inr }}</dd></div>
+      {% endif %}
+    </dl>
+  </div>
+
+  <aside class="ticket-stub">
+    <span class="field-label">PNR</span>
+    <button type="button" class="pnr-code" data-copy="{{ b.pnr }}" title="Copy PNR">{{ b.pnr }} {{ icon('ticket', 16) }}</button>
+    {{ qr(b.pnr) }}
+    <div class="stub-seats">
+      {% for s in b.seats %}<span class="seat-tag">{{ s }}</span>{% endfor %}
+    </div>
+    <div class="stub-total">
+      <span class="subtle">{{ 'Amount paid' if not cancelled else 'Paid · refund issued' }}</span>
+      <strong>₹{{ b.fare.total|inr }}</strong>
+    </div>
+    <p class="stub-note subtle">Show this ticket and a photo ID while boarding.</p>
+  </aside>
+</article>
+{%- endmacro %}

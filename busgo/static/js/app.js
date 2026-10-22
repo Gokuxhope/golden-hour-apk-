@@ -543,6 +543,165 @@
     });
   }
 
+  /* --------------------------------------------------------------- payment */
+  var payForm = $("[data-pay-form]");
+  if (payForm) {
+    var tabs = $all("[data-tab]", payForm);
+    var tabBar = $("[data-tabs]", payForm);
+    var methodInput = $("[data-pay-method]", payForm);
+
+    tabs.forEach(function (tab, index) {
+      tab.addEventListener("click", function () {
+        tabs.forEach(function (t) {
+          var on = t === tab;
+          t.classList.toggle("is-on", on);
+          t.setAttribute("aria-selected", String(on));
+        });
+        $all("[data-panel]", payForm).forEach(function (panel) {
+          var on = panel.dataset.panel === tab.dataset.tab;
+          panel.hidden = !on;
+          if (on) replay(panel, "is-on");
+        });
+        tabBar.style.setProperty("--tab", index);
+        methodInput.value = tab.dataset.tab;
+      });
+    });
+
+    // Live card preview
+    var cc = $("[data-cc]", payForm);
+    var ccOut = {
+      number: $("[data-cc-number]", payForm), name: $("[data-cc-name]", payForm),
+      exp: $("[data-cc-exp]", payForm), cvv: $("[data-cc-cvv]", payForm)
+    };
+    $all("[data-cc-in]", payForm).forEach(function (input) {
+      var key = input.dataset.ccIn;
+      input.addEventListener("input", function () {
+        var v = input.value;
+        if (key === "number") {
+          v = v.replace(/\D/g, "").slice(0, 16);
+          input.value = v.replace(/(.{4})/g, "$1 ").trim();
+          var padded = (v + "••••••••••••••••").slice(0, 16);
+          ccOut.number.textContent = padded.replace(/(.{4})/g, "$1 ").trim();
+        } else if (key === "exp") {
+          v = v.replace(/\D/g, "").slice(0, 4);
+          input.value = v.length > 2 ? v.slice(0, 2) + "/" + v.slice(2) : v;
+          ccOut.exp.textContent = input.value || "MM/YY";
+        } else if (key === "cvv") {
+          input.value = v.replace(/\D/g, "").slice(0, 4);
+          ccOut.cvv.textContent = input.value.replace(/./g, "•") || "•••";
+        } else {
+          ccOut.name.textContent = v.toUpperCase() || "YOUR NAME";
+        }
+      });
+      if (key === "cvv") {
+        input.addEventListener("focus", function () { cc.classList.add("is-flipped"); });
+        input.addEventListener("blur", function () { cc.classList.remove("is-flipped"); });
+      }
+    });
+
+    // Fake processing: spinner for 2 seconds, then really submit to Python.
+    var paying = false;
+    payForm.addEventListener("submit", function (e) {
+      if (paying) return;
+      e.preventDefault();
+      paying = true;
+      var btn = $("[data-pay-btn]", payForm);
+      btn.classList.add("is-paying");
+      btn.setAttribute("aria-busy", "true");
+      payForm.classList.add("is-paying");
+      setTimeout(function () { payForm.submit(); }, 2000);
+    });
+  }
+
+  /* ------------------------------------------------------ ticket utilities */
+  $all("[data-print]").forEach(function (btn) {
+    btn.addEventListener("click", function () { window.print(); });
+  });
+
+  $all("[data-copy]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var text = btn.dataset.copy;
+      var done = function () { toast("PNR " + text + " copied to clipboard.", "success"); };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done, function () { toast("PNR: " + text, "info"); });
+      } else {
+        toast("PNR: " + text, "info");
+      }
+    });
+  });
+
+  /* -------------------------------------------------------------- confetti */
+  var confettiCanvas = $("[data-confetti]");
+  if (confettiCanvas && !reduceMotion) {
+    setTimeout(function () { burstConfetti(confettiCanvas); }, 650);
+  } else if (confettiCanvas) {
+    confettiCanvas.remove();
+  }
+
+  function burstConfetti(canvas) {
+    var ctx = canvas.getContext("2d");
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var W = window.innerWidth, H = window.innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+
+    var colors = ["#a78bfa", "#8b5cf6", "#22d3ee", "#67e8f9", "#f472b6", "#fbbf24", "#34d399", "#ffffff"];
+    var origin = $(".check-wrap");
+    var r = origin ? origin.getBoundingClientRect() : { left: W / 2, top: H / 3, width: 0, height: 0 };
+    var ox = r.left + r.width / 2, oy = r.top + r.height / 2;
+    var parts = [];
+
+    function spawn(x, y, count, spread, baseAngle, power) {
+      for (var i = 0; i < count; i++) {
+        var angle = baseAngle + (Math.random() - 0.5) * spread;
+        var speed = power * (0.45 + Math.random() * 0.75);
+        parts.push({
+          x: x, y: y,
+          vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+          w: 6 + Math.random() * 6, h: 8 + Math.random() * 8,
+          rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.35,
+          wobble: Math.random() * Math.PI * 2,
+          color: colors[(Math.random() * colors.length) | 0],
+          round: Math.random() < 0.25
+        });
+      }
+    }
+    // One burst from the checkmark, two side cannons from the bottom corners.
+    spawn(ox, oy, 110, Math.PI * 2, 0, 15);
+    spawn(0, H, 60, 0.6, -Math.PI / 3, 24);
+    spawn(W, H, 60, 0.6, -Math.PI * 2 / 3, 24);
+
+    var start = performance.now();
+    function frame(now) {
+      var t = now - start;
+      ctx.clearRect(0, 0, W, H);
+      var alive = 0;
+      parts.forEach(function (p) {
+        p.vx *= 0.985;
+        p.vy = p.vy * 0.985 + 0.32;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.vr;
+        p.wobble += 0.12;
+        if (p.y > H + 30) return;
+        alive++;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.scale(1, Math.cos(p.wobble));
+        ctx.globalAlpha = Math.max(0, Math.min(1, 1.8 - t / 2400));
+        ctx.fillStyle = p.color;
+        if (p.round) { ctx.beginPath(); ctx.arc(0, 0, p.w / 2.4, 0, Math.PI * 2); ctx.fill(); }
+        else ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      });
+      if (alive && t < 4400) requestAnimationFrame(frame);
+      else canvas.remove();
+    }
+    requestAnimationFrame(frame);
+  }
+
   // Restart a one-shot CSS animation class (bounce, shake...).
   function replay(el, cls) {
     el.classList.remove(cls);

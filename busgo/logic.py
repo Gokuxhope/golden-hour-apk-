@@ -10,6 +10,7 @@ Run `python logic.py` to see a demo search, booking and cancellation in the
 terminal. The demo works on an in-memory copy and does not change data.json.
 """
 
+import hashlib
 import random
 import re
 import string
@@ -536,6 +537,33 @@ def book_seats(trip_id, seats, passengers, user, contact=None, boarding=None, dr
 
 def get_booking(pnr):
     return db["bookings"].get((pnr or "").strip().upper())
+
+
+def qr_matrix(text, size=21):
+    """
+    A QR-code-LOOKING square pattern for the ticket (not a real, scannable QR).
+
+    The PNR is hashed with SHA-256, the hash bits fill a size x size grid
+    (1 = dark square), and the three big "finder" squares are drawn in the
+    corners like a real QR code. The same PNR always gives the same pattern.
+    Returns a list of rows, each a list of True/False.
+    """
+    digest = hashlib.sha256(text.encode()).digest()
+    bits = "".join(f"{byte:08b}" for byte in digest * (size * size // 256 + 1))
+    grid = [[bits[r * size + c] == "1" for c in range(size)] for r in range(size)]
+
+    def finder(top, left):
+        for r in range(-1, 8):
+            for c in range(-1, 8):
+                rr, cc = top + r, left + c
+                if 0 <= rr < size and 0 <= cc < size:
+                    ring = max(abs(r - 3), abs(c - 3))  # 0 = centre, 3 = outer edge
+                    grid[rr][cc] = ring in (0, 1, 3)
+
+    finder(0, 0)
+    finder(0, size - 7)
+    finder(size - 7, 0)
+    return grid
 
 
 def booking_view(booking, now=None):
