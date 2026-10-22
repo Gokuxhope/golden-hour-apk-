@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "_macros.html" import steps, trip_strip %}
+{% block title %}Choose seats · {{ trip.source }} to {{ trip.destination }}{% endblock %}
+
+{% block content %}
+<section class="container booking-page seats-page-pad">
+  <div class="booking-top reveal" style="--i: 0">
+    <a href="{{ url_for('search', source=trip.source, destination=trip.destination, date=trip.date) }}" class="back-link">{{ icon('arrow-left', 16) }} Back to buses</a>
+    {{ steps(1) }}
+  </div>
+
+  <div class="glass booking-trip reveal" style="--i: 1">{{ trip_strip(trip) }}</div>
+
+  <div class="seat-layout">
+    {# ------------------------------------------------ Seat map ------------------------------------------------ #}
+    <div class="seat-col">
+      <div class="seat-legend reveal" style="--i: 2">
+        <span><i class="swatch swatch-available"></i> Available</span>
+        <span><i class="swatch swatch-selected"></i> Selected</span>
+        <span><i class="swatch swatch-ladies"></i> Ladies</span>
+        <span><i class="swatch swatch-booked"></i> Booked</span>
+      </div>
+
+      <div class="decks {{ 'decks-sleeper' if trip.is_sleeper else 'decks-seater' }}" data-seat-map
+           data-trip="{{ trip.id }}" data-max="{{ max_seats }}" data-fare-url="{{ url_for('api_fare') }}">
+        {% set n = namespace(i=0) %}
+        {% for deck in seat_map.decks %}
+          <div class="bus-shell glass reveal" style="--i: {{ loop.index + 2 }}">
+            <div class="bus-front {{ 'bus-front-upper' if not loop.first }}">
+              {% if loop.first %}
+                <span class="door">{{ icon('arrow-left', 14) }} Door</span>
+                <span class="steering" title="Driver">{{ icon('steering', 26) }}</span>
+              {% else %}
+                <span class="vent" aria-hidden="true"><i></i><i></i><i></i></span>
+              {% endif %}
+            </div>
+            <p class="deck-name">{{ deck.name }}</p>
+            <div class="seat-grid" style="--cols: {{ deck.rows[0]|length }}">
+              {% for row in deck.rows %}
+                {% for cell in row %}
+                  {% if cell %}
+                    {% set n.i = n.i + 1 %}
+                    <button type="button"
+                            class="seat seat-{{ cell.kind }} is-{{ cell.status }}"
+                            style="--i: {{ n.i }}"
+                            data-seat="{{ cell.id }}"
+                            data-ladies="{{ 1 if cell.status == 'ladies' else 0 }}"
+                            data-label="{{ cell.label.split(' · ')[-1] }}"
+                            {% if cell.status == 'booked' %}disabled aria-label="Seat {{ cell.id }}, booked"
+                            {% else %}aria-pressed="false" aria-label="Seat {{ cell.id }}, {{ cell.label }}{{ ', ladies only' if cell.status == 'ladies' }}"{% endif %}
+                            title="{{ cell.id }} · {{ 'Booked' if cell.status == 'booked' else cell.label }}{{ ' · Ladies' if cell.status == 'ladies' }}">
+                      <span>{{ cell.id }}</span>
+                    </button>
+                  {% else %}
+                    <span class="aisle" aria-hidden="true"></span>
+                  {% endif %}
+                {% endfor %}
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <p class="seat-hint subtle reveal" style="--i: 5">{{ icon('info', 15) }} Tap up to {{ max_seats }} seats. {{ seat_map.counts.get('available', 0) + seat_map.counts.get('ladies', 0) }} of {{ trip.total_seats }} are free · ₹{{ trip.base_fare|inr }} each</p>
+    </div>
+
+    {# ------------------------------------------------ Summary ------------------------------------------------ #}
+    <aside class="summary-col">
+      <form class="summary glass reveal" style="--i: 3" method="post" id="seat-form" data-seat-form>
+        <input type="hidden" name="seats" value="{{ preselected|join(',') }}" data-seats-input>
+
+        <h2 class="summary-title">Your selection</h2>
+        <div class="seat-chips" data-seat-chips>
+          <p class="seat-chips-empty subtle" data-chips-empty>{{ icon('seat', 18) }} No seats yet — tap a seat on the map</p>
+        </div>
+
+        <div class="points">
+          <label class="field">
+            <span class="field-label">Boarding point · {{ trip.source }}</span>
+            <span class="input-wrap">
+              {{ icon('pin', 18) }}
+              <select class="select" name="boarding">
+                {% for p in boarding %}
+                  <option value="{{ p.name }}" {{ 'selected' if p.name == chosen_boarding }}>{{ p.time }} · {{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </span>
+          </label>
+          <label class="field">
+            <span class="field-label">Dropping point · {{ trip.destination }}</span>
+            <span class="input-wrap">
+              {{ icon('route', 18) }}
+              <select class="select" name="dropping">
+                {% for p in dropping %}
+                  <option value="{{ p.name }}" {{ 'selected' if p.name == chosen_dropping or (not chosen_dropping and loop.last) }}>{{ p.time }} · {{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </span>
+          </label>
+        </div>
+
+        <dl class="fare-rows">
+          <div><dt>Base fare <span class="subtle">× <span data-fare="seat_count">{{ fare_preview.seat_count }}</span></span></dt>
+               <dd>₹<span data-fare="base_total" data-current="{{ fare_preview.base_total }}">{{ fare_preview.base_total|inr }}</span></dd></div>
+          <div><dt>Service fee <span class="subtle">(₹{{ fare_preview.service_fee_per_seat }}/seat)</span></dt>
+               <dd>₹<span data-fare="service_fee" data-current="{{ fare_preview.service_fee }}">{{ fare_preview.service_fee|inr }}</span></dd></div>
+          <div><dt>GST <span class="subtle">({{ fare_preview.gst_rate }}%)</span></dt>
+               <dd>₹<span data-fare="gst" data-current="{{ fare_preview.gst }}">{{ fare_preview.gst|inr }}</span></dd></div>
+          <div class="fare-total"><dt>Total</dt>
+               <dd>₹<span data-fare="total" data-current="{{ fare_preview.total }}">{{ fare_preview.total|inr }}</span></dd></div>
+        </dl>
+
+        <button class="btn btn-primary btn-lg btn-block" type="submit" data-continue {{ 'disabled' if not preselected }}>
+          Continue {{ icon('arrow-right', 18, 'icon-arrow') }}
+        </button>
+        <p class="summary-note subtle">{{ icon('lock', 14) }} Fares worked out by Python · GST included</p>
+      </form>
+    </aside>
+  </div>
+</section>
+
+{# Phone: sticky bottom bar with the live total #}
+<div class="seat-bar" data-seat-bar>
+  <div>
+    <span class="seat-bar-count"><span data-bar-count>0</span> selected</span>
+    <strong class="seat-bar-total">₹<span data-fare="total" data-current="{{ fare_preview.total }}">{{ fare_preview.total|inr }}</span></strong>
+  </div>
+  <button class="btn btn-primary" type="submit" form="seat-form" data-continue {{ 'disabled' if not preselected }}>Continue {{ icon('arrow-right', 18, 'icon-arrow') }}</button>
+</div>
+
+<template id="chip-template"><span class="seat-chip"><span class="seat-chip-id"></span><small></small></span></template>
+<script>window.BUSGO_PRESELECTED = {{ preselected|tojson }};</script>
+{% endblock %}

@@ -316,11 +316,27 @@ def get_seat_map(trip_id):
                 else:
                     status = "available"
                 counts[status] += 1
-                cells.append({"id": seat, "status": status, "kind": kind})
+                cells.append({"id": seat, "status": status, "kind": kind,
+                              "label": seat_label(bus, seat)})
             rows.append(cells)
         decks.append({"name": deck["name"], "rows": rows})
 
     return {"trip": trip_view(trip), "decks": decks, "counts": dict(counts)}
+
+
+def seat_label(bus, seat):
+    """
+    Describe a seat in words, e.g. "Lower berth · Window" or "Seat · Aisle".
+    A seat is a window seat if it is the first or last cell of its row.
+    """
+    for deck in data.build_layout(bus["layout"]):
+        for row in deck["rows"]:
+            if seat in row:
+                position = "Window" if seat in (row[0], row[-1]) else "Aisle"
+                if bus["layout"] == "sleeper":
+                    return f"{deck['name'].split()[0]} berth · {position}"
+                return f"Seat · {position}"
+    return "Seat"
 
 
 def get_boarding_points(trip_id):
@@ -339,6 +355,16 @@ def get_boarding_points(trip_id):
     dropping = [{"name": p, "time": (end - timedelta(minutes=15 * (len(drops) - 1 - i))).strftime("%H:%M")}
                 for i, p in enumerate(drops)]
     return boarding, dropping
+
+
+def validate_points(trip_id, boarding, dropping):
+    """The chosen pickup and drop points must be real stops for this trip."""
+    boarding_points, dropping_points = get_boarding_points(trip_id)
+    if boarding not in [b["name"] for b in boarding_points]:
+        return False, "Please choose a boarding point."
+    if dropping not in [d["name"] for d in dropping_points]:
+        return False, "Please choose a dropping point."
+    return True, ""
 
 
 def validate_seat_selection(trip_id, seats, now=None):

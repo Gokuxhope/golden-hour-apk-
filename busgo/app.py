@@ -150,11 +150,111 @@ def search():
     )
 
 
-@app.route("/trip/<trip_id>/seats")
+def get_draft():
+    """The booking in progress (seats → passengers → payment), kept in the session."""
+    return session.get("draft")
+
+
+@app.route("/trip/<trip_id>/seats", methods=["GET", "POST"])
 def seats(trip_id):
-    if not logic.get_trip(trip_id):
+    trip = logic.get_trip(trip_id)
+    if not trip:
         abort(404)
-    return render_template("placeholder.html", title="Seat selection", phase="Phase 5", page_icon="seat")
+    view = logic.trip_view(trip)
+    if view["departed"]:
+        flash("That bus has already left — here are the next ones.", "info")
+        return redirect(url_for("search", source=trip["source"], destination=trip["destination"],
+                                date=date.today().isoformat()))
+
+    if request.method == "POST":
+        chosen = [s for s in request.form.get("seats", "").split(",") if s]
+        boarding, dropping = request.form.get("boarding", ""), request.form.get("dropping", "")
+        ok, error = logic.validate_seat_selection(trip_id, chosen)
+        if ok:
+            ok, error = logic.validate_points(trip_id, boarding, dropping)
+        if not ok:
+            flash(error, "error")
+            return redirect(url_for("seats", trip_id=trip_id))
+        session["draft"] = {"trip_id": trip_id, "seats": chosen, "boarding": boarding, "dropping": dropping}
+        if not current_user():
+            flash("Seats saved! Pick a profile to fill in passenger details.", "info")
+            return redirect(url_for("login", next=url_for("passengers")))
+        return redirect(url_for("passengers"))
+
+    # Re-select the seats from an unfinished booking on this trip (if they are still free).
+    draft = get_draft() or {}
+    preselected = []
+    if draft.get("trip_id") == trip_id:
+        preselected = [s for s in draft.get("seats", []) if s not in trip["booked_seats"]]
+    boarding, dropping = logic.get_boarding_points(trip_id)
+    return render_template(
+        "seats.html",
+        seat_map=logic.get_seat_map(trip_id),
+        trip=view,
+        boarding=boarding,
+        dropping=dropping,
+        preselected=preselected,
+        chosen_boarding=draft.get("boarding") if draft.get("trip_id") == trip_id else None,
+        chosen_dropping=draft.get("dropping") if draft.get("trip_id") == trip_id else None,
+        max_seats=logic.MAX_SEATS_PER_BOOKING,
+        fare_preview=logic.calculate_fare(trip["base_fare"], preselected, view["bus"]["type"]),
+    )
+
+
+@app.route("/passengers", methods=["GET", "POST"])
+@login_required
+def passengers():
+    draft = get_draft()
+    trip = logic.get_trip(draft["trip_id"]) if draft else None
+    if not trip:
+        flash("Your session expired — please choose your seats again.", "info")
+        return redirect(url_for("index"))
+    view = logic.trip_view(trip)
+    bus = view["bus"]
+    user = current_user()
+
+    if request.method == "POST":
+        people = [{"seat": seat,
+                   "name": request.form.get(f"name_{seat}", "").strip(),
+                   "age": request.form.get(f"age_{seat}", "").strip(),
+                   "gender": request.form.get(f"gender_{seat}", "")} for seat in draft["seats"]]
+        contact = {"email": request.form.get("email", "").strip(), "phone": request.form.get("phone", "").strip()}
+        ok, error = logic.validate_seat_selection(trip["id"], draft["seats"])
+        if not ok:
+            flash(error + " Please pick again.", "error")
+            return redirect(url_for("seats", trip_id=trip["id"]))
+        ok, error = logic.validate_passengers(draft["seats"], people, trip)
+        if ok:
+            ok, error = logic.validate_contact(contact)
+        if ok:
+            draft.update(passengers=people, contact=contact)
+            session["draft"] = draft
+            return redirect(url_for("payment"))
+        flash(error, "error")
+    else:
+        people = draft.get("passengers") or [{"seat": s, "name": "", "age": "", "gender": ""} for s in draft["seats"]]
+        contact = draft.get("contact") or {"email": user["email"], "phone": user["phone"]}
+
+    for person in people:
+        person["label"] = logic.seat_label(bus, person["seat"])
+        person["ladies"] = person["seat"] in trip["ladies_seats"]
+    boarding, dropping = logic.get_boarding_points(trip["id"])
+    return render_template(
+        "passengers.html",
+        trip=view,
+        draft=draft,
+        people=people,
+        contact=contact,
+        boarding=next(b for b in boarding if b["name"] == draft["boarding"]),
+        dropping=next(d for d in dropping if d["name"] == draft["dropping"]),
+        fare=logic.calculate_fare(trip["base_fare"], draft["seats"], bus["type"]),
+    )
+
+
+@app.route("/payment")
+@login_required
+def payment():
+    return render_template("placeholder.html", title="Payment", phase="Phase 6", page_icon="card")
 
 
 @app.route("/api/trip/<trip_id>/seats")

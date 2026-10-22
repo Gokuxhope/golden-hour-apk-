@@ -391,6 +391,165 @@
     });
   }
 
+  /* -------------------------------------------------------------- seat map */
+  var seatMap = $("[data-seat-map]");
+  if (seatMap) {
+    var maxSeats = parseInt(seatMap.dataset.max, 10) || 6;
+    var fareUrl = seatMap.dataset.fareUrl;
+    var tripId = seatMap.dataset.trip;
+    var seatsInput = $("[data-seats-input]");
+    var chipsBox = $("[data-seat-chips]");
+    var chipsEmpty = $("[data-chips-empty]");
+    var chipTpl = $("#chip-template");
+    var continueBtns = $all("[data-continue]");
+    var barCount = $("[data-bar-count]");
+    var selected = [];
+    var ladiesWarned = false;
+    var fareRequest = 0;
+
+    function seatButton(id) { return $('.seat[data-seat="' + id + '"]', seatMap); }
+
+    // Ask Python for the price of the current selection, then animate the numbers.
+    function refreshFare() {
+      var token = ++fareRequest;
+      fetch(fareUrl + "?trip_id=" + encodeURIComponent(tripId) + "&seats=" + encodeURIComponent(selected.join(",")))
+        .then(function (r) { return r.json(); })
+        .then(function (fare) {
+          if (token !== fareRequest) return; // a newer click already asked again
+          $all("[data-fare]").forEach(function (el) {
+            var key = el.dataset.fare;
+            if (key === "seat_count") el.textContent = fare.seat_count;
+            else animateNumber(el, fare[key], 650);
+          });
+        })
+        .catch(function () { toast("Couldn't update the fare — is the server running?", "error"); });
+    }
+
+    function render() {
+      seatsInput.value = selected.join(",");
+      continueBtns.forEach(function (b) { b.disabled = selected.length === 0; });
+      if (barCount) barCount.textContent = selected.length;
+
+      // Seat chips in the summary (add new ones with a pop, drop removed ones)
+      var existing = {};
+      $all(".seat-chip", chipsBox).forEach(function (chip) { existing[chip.dataset.seat] = chip; });
+      Object.keys(existing).forEach(function (id) {
+        if (selected.indexOf(id) === -1) existing[id].remove();
+      });
+      selected.forEach(function (id) {
+        if (existing[id]) return;
+        var chip = chipTpl.content.firstElementChild.cloneNode(true);
+        chip.dataset.seat = id;
+        $(".seat-chip-id", chip).textContent = id;
+        $("small", chip).textContent = seatButton(id).dataset.label;
+        if (seatButton(id).dataset.ladies === "1") chip.classList.add("is-ladies");
+        chipsBox.appendChild(chip);
+      });
+      chipsEmpty.hidden = selected.length > 0;
+      refreshFare();
+    }
+
+    function toggle(btn, silent) {
+      var id = btn.dataset.seat;
+      var at = selected.indexOf(id);
+      if (at !== -1) {
+        selected.splice(at, 1);
+        btn.classList.remove("is-selected");
+        btn.setAttribute("aria-pressed", "false");
+      } else {
+        if (selected.length >= maxSeats) {
+          replay(btn, "is-shake");
+          toast("You can book up to " + maxSeats + " seats at a time.", "error");
+          return;
+        }
+        selected.push(id);
+        btn.classList.add("is-selected");
+        btn.setAttribute("aria-pressed", "true");
+        if (btn.dataset.ladies === "1" && !ladiesWarned && !silent) {
+          ladiesWarned = true;
+          toast("Seat " + id + " is reserved for ladies — the passenger must be female.", "info");
+        }
+      }
+      if (!silent) replay(btn, "is-bounce");
+    }
+
+    seatMap.addEventListener("click", function (e) {
+      var btn = e.target.closest(".seat");
+      if (!btn || btn.disabled) return;
+      toggle(btn);
+      render();
+    });
+
+    (window.BUSGO_PRESELECTED || []).forEach(function (id) {
+      var btn = seatButton(id);
+      if (btn && !btn.disabled) toggle(btn, true);
+    });
+    render();
+
+    $("[data-seat-form]").addEventListener("submit", function (e) {
+      if (!selected.length) { e.preventDefault(); toast("Pick at least one seat first.", "error"); return; }
+      continueBtns.forEach(function (b) { b.classList.add("is-busy"); });
+    });
+  }
+
+  /* ------------------------------------------------------ passenger details */
+  var paxForm = $("[data-pax-form]");
+  if (paxForm) {
+    var fillMe = $("[data-fill-me]", paxForm);
+    if (fillMe) {
+      fillMe.addEventListener("click", function () {
+        var card = fillMe.closest(".pax-card");
+        $('input[name^="name_"]', card).value = fillMe.dataset.name;
+        $('input[name^="age_"]', card).value = fillMe.dataset.age;
+        var radio = $('input[type="radio"][value="' + fillMe.dataset.gender + '"]', card);
+        if (radio && !radio.disabled) radio.checked = true;
+        $all(".is-invalid", card).forEach(function (el) { el.classList.remove("is-invalid"); });
+        replay(card, "is-filled");
+      });
+    }
+
+    paxForm.addEventListener("input", function (e) {
+      var target = e.target.closest(".input, .segmented");
+      if (target) target.classList.remove("is-invalid");
+      var seg = e.target.closest(".segmented");
+      if (seg) seg.classList.remove("is-invalid");
+    });
+
+    // Friendly checks before sending — Python checks everything again on the server.
+    paxForm.addEventListener("submit", function (e) {
+      var problems = [];
+      function flag(el, message) { el.classList.add("is-invalid"); problems.push({ el: el, message: message }); }
+
+      $all(".pax-card:not(.contact-card)", paxForm).forEach(function (card, i) {
+        var n = i + 1;
+        var name = $('input[name^="name_"]', card);
+        var age = $('input[name^="age_"]', card);
+        if (name.value.trim().length < 2) flag(name, "Enter a name for passenger " + n + ".");
+        var a = parseInt(age.value, 10);
+        if (!(a >= 1 && a <= 110)) flag(age, "Enter an age between 1 and 110 for passenger " + n + ".");
+        if (!$('input[type="radio"]:checked', card)) flag($(".segmented", card), "Choose a gender for passenger " + n + ".");
+      });
+      var email = $('input[name="email"]', paxForm);
+      var phone = $('input[name="phone"]', paxForm);
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.value.trim())) flag(email, "Enter a valid email address.");
+      if (!/^(\+91|0)?[6-9]\d{9}$/.test(phone.value.replace(/[\s-]/g, ""))) flag(phone, "Enter a valid 10-digit mobile number.");
+
+      if (problems.length) {
+        e.preventDefault();
+        toast(problems[0].message, "error");
+        problems[0].el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+        problems.forEach(function (p) { replay(p.el, "is-shake"); });
+      }
+    });
+  }
+
+  // Restart a one-shot CSS animation class (bounce, shake...).
+  function replay(el, cls) {
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  }
+
   /* ------------------------------------------------------------------ init */
   function init(root) {
     $all("[data-tilt]", root).forEach(bindTilt);

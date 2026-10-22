@@ -43,6 +43,8 @@ USERS = [
         "phone": "98450 12345",
         "city": "Bengaluru",
         "tagline": "Weekend explorer",
+        "age": 27,
+        "gender": "Male",
     },
     {
         "id": "u2",
@@ -52,6 +54,8 @@ USERS = [
         "phone": "99860 67890",
         "city": "Kochi",
         "tagline": "Frequent commuter",
+        "age": 26,
+        "gender": "Female",
     },
     {
         "id": "admin",
@@ -61,6 +65,8 @@ USERS = [
         "phone": "80 4000 1234",
         "city": "Bengaluru",
         "tagline": "Operations admin",
+        "age": 34,
+        "gender": "Female",
     },
 ]
 

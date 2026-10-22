@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% from "_macros.html" import steps, trip_strip %}
+{% block title %}Passenger details{% endblock %}
+
+{% block content %}
+<section class="container booking-page">
+  <div class="booking-top reveal" style="--i: 0">
+    <a href="{{ url_for('seats', trip_id=trip.id) }}" class="back-link">{{ icon('arrow-left', 16) }} Change seats</a>
+    {{ steps(2) }}
+  </div>
+
+  <div class="glass booking-trip reveal" style="--i: 1">{{ trip_strip(trip) }}</div>
+
+  <form class="seat-layout pax-layout" method="post" novalidate data-pax-form>
+    <div class="pax-col">
+      <div class="pax-head reveal" style="--i: 2">
+        <h1 class="section-title">Who's travelling?</h1>
+        <p class="muted">One card per seat. Names should match a government ID.</p>
+      </div>
+
+      {% for p in people %}
+        <article class="pax-card glass" style="--i: {{ loop.index0 }}">
+          <header class="pax-card-head">
+            <span class="pax-seat {{ 'is-ladies' if p.ladies }}">{{ p.seat }}</span>
+            <div class="pax-card-title">
+              <strong>Passenger {{ loop.index }}</strong>
+              <span class="subtle">{{ p.label }}</span>
+            </div>
+            {% if p.ladies %}
+              <span class="badge badge-pink">{{ icon('female', 13) }} Ladies seat</span>
+            {% endif %}
+            {% if loop.first %}
+              <button type="button" class="btn btn-ghost btn-sm fill-me" data-fill-me
+                      data-name="{{ current_user.name }}" data-age="{{ current_user.age }}" data-gender="{{ current_user.gender }}"
+                      {% if p.ladies and current_user.gender != 'Female' %}hidden{% endif %}>
+                {{ icon('user', 15) }} It's me
+              </button>
+            {% endif %}
+          </header>
+
+          <div class="pax-fields">
+            <label class="field pax-name">
+              <span class="field-label">Full name</span>
+              <span class="input-wrap">
+                {{ icon('user', 18) }}
+                <input class="input" name="name_{{ p.seat }}" value="{{ p.name }}" placeholder="As on ID proof" autocomplete="name" required minlength="2" maxlength="60">
+              </span>
+            </label>
+            <label class="field pax-age">
+              <span class="field-label">Age</span>
+              <input class="input" name="age_{{ p.seat }}" value="{{ p.age }}" type="number" inputmode="numeric" min="1" max="110" placeholder="—" required>
+            </label>
+            <fieldset class="field pax-gender">
+              <legend class="field-label">Gender</legend>
+              <div class="segmented">
+                {% for g in ['Male', 'Female', 'Other'] %}
+                  {% set locked = p.ladies and g != 'Female' %}
+                  <label class="seg-option {{ 'is-locked' if locked }}">
+                    <input type="radio" name="gender_{{ p.seat }}" value="{{ g }}"
+                           {{ 'checked' if p.gender == g or (p.ladies and g == 'Female') }}
+                           {{ 'disabled' if locked }} required>
+                    <span>{{ g }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </fieldset>
+          </div>
+        </article>
+      {% endfor %}
+
+      <article class="pax-card glass contact-card" style="--i: {{ people|length }}">
+        <header class="pax-card-head">
+          <span class="pax-seat pax-seat-icon">{{ icon('mail', 20) }}</span>
+          <div class="pax-card-title">
+            <strong>Contact details</strong>
+            <span class="subtle">Your e-ticket and updates go here (in a real app)</span>
+          </div>
+        </header>
+        <div class="pax-fields contact-fields">
+          <label class="field">
+            <span class="field-label">Email</span>
+            <span class="input-wrap">{{ icon('mail', 18) }}<input class="input" type="email" name="email" value="{{ contact.email }}" autocomplete="email" required></span>
+          </label>
+          <label class="field">
+            <span class="field-label">Mobile number</span>
+            <span class="input-wrap">{{ icon('phone', 18) }}<input class="input" type="tel" name="phone" value="{{ contact.phone }}" autocomplete="tel" inputmode="tel" placeholder="10-digit mobile" required></span>
+          </label>
+        </div>
+      </article>
+    </div>
+
+    <aside class="summary-col">
+      <div class="summary glass reveal" style="--i: 3">
+        <h2 class="summary-title">Trip summary</h2>
+        <div class="seat-chips">
+          {% for p in people %}
+            <span class="seat-chip"><span class="seat-chip-id">{{ p.seat }}</span><small>{{ p.label.split(' · ')[-1] }}</small></span>
+          {% endfor %}
+        </div>
+        <ul class="stops">
+          <li><span class="stop-dot"></span><div><strong>{{ boarding.time }} · {{ boarding.name }}</strong><span class="subtle">Boarding · {{ trip.source }}</span></div></li>
+          <li><span class="stop-dot stop-dot-end"></span><div><strong>{{ dropping.time }} · {{ dropping.name }}</strong><span class="subtle">Dropping · {{ trip.destination }}</span></div></li>
+        </ul>
+        <dl class="fare-rows">
+          <div><dt>Base fare <span class="subtle">× {{ fare.seat_count }}</span></dt><dd>₹{{ fare.base_total|inr }}</dd></div>
+          <div><dt>Service fee</dt><dd>₹{{ fare.service_fee|inr }}</dd></div>
+          <div><dt>GST <span class="subtle">({{ fare.gst_rate }}%)</span></dt><dd>₹{{ fare.gst|inr }}</dd></div>
+          <div class="fare-total"><dt>Total</dt><dd>₹<span data-count="{{ fare.total }}" data-duration="900">{{ fare.total|inr }}</span></dd></div>
+        </dl>
+        <button class="btn btn-primary btn-lg btn-block" type="submit">Continue to payment {{ icon('arrow-right', 18, 'icon-arrow') }}</button>
+        <p class="summary-note subtle">{{ icon('shield', 14) }} 90% refund if you cancel 24h+ before departure</p>
+      </div>
+    </aside>
+  </form>
+</section>
+{% endblock %}

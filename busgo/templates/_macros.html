@@ -87,3 +87,34 @@
 {%- set parts = user.name.split() -%}
 <span class="avatar avatar-{{ user.id }}" style="--size: {{ size }}px">{{ parts[0][0] }}{{ parts[-1][0] }}</span>
 {%- endmacro %}
+
+
+{# Booking progress: Seats → Passengers → Payment → Ticket #}
+{% macro steps(current) -%}
+{%- set items = [('Seats', 'seat'), ('Passengers', 'users'), ('Payment', 'card'), ('Ticket', 'ticket')] -%}
+<ol class="steps" aria-label="Booking progress">
+  {% for label, ico in items %}
+    {% set n = loop.index %}
+    <li class="step {{ 'is-done' if n < current }} {{ 'is-current' if n == current }}" {% if n == current %}aria-current="step"{% endif %}>
+      <span class="step-dot">{{ icon('check' if n < current else ico, 15) }}</span>
+      <span class="step-label">{{ label }}</span>
+    </li>
+  {% endfor %}
+</ol>
+{%- endmacro %}
+
+
+{# Compact trip summary used on the booking pages #}
+{% macro trip_strip(trip) -%}
+<div class="trip-strip">
+  <div class="trip-strip-op">
+    <strong>{{ trip.bus.name }}</strong>
+    <span class="subtle">{{ trip.bus.type }} · {{ trip.date_label }}</span>
+  </div>
+  <div class="trip-strip-time">
+    <span><strong>{{ trip.depart }}</strong> {{ trip.source }}</span>
+    <span class="trip-strip-line">{{ icon('bus', 14) }}<small>{{ trip.duration }}</small></span>
+    <span><strong>{{ trip.arrive }}{% if trip.next_day %}<sup>+1</sup>{% endif %}</strong> {{ trip.destination }}</span>
+  </div>
+</div>
+{%- endmacro %}
