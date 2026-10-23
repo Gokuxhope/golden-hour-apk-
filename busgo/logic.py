@@ -711,8 +711,10 @@ def get_stats(now=None):
     recent = sorted(bookings, key=lambda b: b["booked_at"], reverse=True)[:10]
 
     # Trips with at least one BusGo booking, soonest first, for the manifest picker.
-    with_bookings = {b["trip_id"] for b in confirmed}
-    manifest_trips = sorted((trip_view(get_trip(t), now) for t in with_bookings),
+    busgo_pax = Counter()
+    for b in confirmed:
+        busgo_pax[b["trip_id"]] += len(b["seats"])
+    manifest_trips = sorted((dict(trip_view(get_trip(t), now), busgo_pax=n) for t, n in busgo_pax.items()),
                             key=lambda t: (t["departed"], t["date"], t["depart"]))
 
     return {
@@ -724,6 +726,7 @@ def get_stats(now=None):
         "todays_trips": len(todays),
         "todays_departed": sum(1 for t in todays if departure_time(t) <= now),
         "routes": routes,
+        "route_total": sum(per_route.values()),
         "recent": [booking_view(b, now) for b in recent],
         "manifest_trips": manifest_trips[:20],
     }

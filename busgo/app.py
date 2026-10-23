@@ -379,7 +379,35 @@ def pnr_status():
 @app.route("/admin")
 @admin_required
 def admin():
-    return render_template("placeholder.html", title="Admin dashboard", phase="Phase 8", page_icon="dashboard")
+    last_added = logic.get_trip(session.get("last_added_trip", ""))
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    form = session.pop("add_trip_form", None) or {
+        "bus_id": "B01", "source": "Bengaluru", "destination": "Goa", "date": tomorrow,
+        "depart": "23:30", "duration_hours": "11", "base_fare": "1499",
+    }
+    first, last = logic.booking_window()
+    return render_template(
+        "admin.html",
+        stats=logic.get_stats(),
+        buses=data.BUSES,
+        cities=logic.list_cities(),
+        form=form,
+        window={"min": first.isoformat(), "max": last.isoformat()},
+        last_added=logic.trip_view(last_added) if last_added else None,
+        today_label=date.today().strftime("%A, %d %B %Y"),
+    )
+
+
+@app.route("/admin/trips", methods=["POST"])
+@admin_required
+def add_trip():
+    ok, message, trip = logic.add_trip(request.form)
+    flash(message, "success" if ok else "error")
+    if ok:
+        session["last_added_trip"] = trip["id"]
+    else:
+        session["add_trip_form"] = request.form.to_dict()  # keep what the admin typed
+    return redirect(url_for("admin") + "#add-trip")
 
 
 @app.route("/admin/trip/<trip_id>/manifest")
@@ -387,8 +415,8 @@ def admin():
 def manifest(trip_id):
     result = logic.get_manifest(trip_id)
     if not result:
-        return jsonify(error="Trip not found"), 404
-    return jsonify(result)
+        abort(404)
+    return render_template("manifest.html", m=result, t=result["trip"])
 
 
 @app.errorhandler(404)

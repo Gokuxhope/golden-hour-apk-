@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Admin dashboard{% endblock %}
+
+{% block content %}
+<section class="container admin-page">
+  <header class="page-head admin-head">
+    <div>
+      <span class="eyebrow reveal" style="--i: 0"><span class="dot">{{ icon('dashboard', 13) }}</span>{{ today_label }}</span>
+      <h1 class="page-title reveal" style="--i: 1">Operations <span class="text-gradient">dashboard</span></h1>
+      <p class="page-sub reveal" style="--i: 2">Welcome back, {{ current_user.name.split()[0] }}. Every number here is worked out live by <code>get_stats()</code> in Python.</p>
+    </div>
+    <a href="#add-trip" class="btn btn-primary reveal" style="--i: 2" data-no-transition>{{ icon('plus', 18) }} Add trip</a>
+  </header>
+
+  {# ---------------------------------------------------------------- stat tiles #}
+  <div class="stat-grid">
+    <article class="stat-card glass reveal" style="--i: 3" data-tilt="4">
+      <span class="stat-icon tone-violet">{{ icon('ticket', 20) }}</span>
+      <span class="stat-label">Confirmed bookings</span>
+      <strong class="stat-value mono" data-count="{{ stats.bookings }}">0</strong>
+      <span class="stat-sub">{{ stats.tickets }} tickets sold · {{ stats.cancelled }} cancelled</span>
+    </article>
+    <article class="stat-card glass reveal" style="--i: 4" data-tilt="4">
+      <span class="stat-icon tone-cyan">{{ icon('rupee', 20) }}</span>
+      <span class="stat-label">Revenue</span>
+      <strong class="stat-value mono" data-count="{{ stats.revenue }}" data-prefix="₹">₹0</strong>
+      <span class="stat-sub">Fares incl. GST + cancellation charges kept</span>
+    </article>
+    <article class="stat-card glass reveal stat-occupancy" style="--i: 5" data-tilt="4">
+      <div>
+        <span class="stat-icon tone-pink">{{ icon('seat', 20) }}</span>
+        <span class="stat-label">Occupancy · next 7 days</span>
+        <strong class="stat-value mono" data-count="{{ stats.occupancy }}" data-decimals="1" data-suffix="%">0%</strong>
+        <span class="stat-sub">Booked seats ÷ all seats</span>
+      </div>
+      <svg class="ring" viewBox="0 0 64 64" aria-hidden="true" style="--p: {{ stats.occupancy / 100 }}">
+        <circle class="ring-track" cx="32" cy="32" r="26"/>
+        <circle class="ring-fill" cx="32" cy="32" r="26"/>
+      </svg>
+    </article>
+    <article class="stat-card glass reveal" style="--i: 6" data-tilt="4">
+      <span class="stat-icon tone-amber">{{ icon('bus', 20) }}</span>
+      <span class="stat-label">Today's trips</span>
+      <strong class="stat-value mono" data-count="{{ stats.todays_trips }}">0</strong>
+      <span class="stat-sub">{{ stats.todays_departed }} departed · {{ stats.todays_trips - stats.todays_departed }} still to go</span>
+    </article>
+  </div>
+
+  {# ------------------------------------------------- chart + add-trip form #}
+  <div class="dash-grid">
+    <article class="dash-card glass reveal" style="--i: 7">
+      <header class="dash-card-head">
+        <div>
+          <h2>Bookings by route</h2>
+          <p class="subtle">Confirmed BusGo bookings · top {{ stats.routes|length }} routes</p>
+        </div>
+        <span class="badge">{{ stats.route_total }} bookings</span>
+      </header>
+      {% if stats.routes %}
+        <ul class="bars" aria-hidden="true">
+          {% for r in stats.routes %}
+            <li class="bar-row" style="--i: {{ loop.index0 }}" tabindex="0">
+              <span class="bar-label">{{ r.route }}</span>
+              <span class="bar-track"><span class="bar-fill" style="width: {{ [r.percent, 3]|max }}%"></span></span>
+              <span class="bar-value mono">{{ r.count }}</span>
+              <span class="bar-tip" role="tooltip">
+                <strong>{{ r.route }}</strong>
+                {{ r.count }} booking{{ 's' if r.count != 1 }} · {{ (100 * r.count / stats.route_total)|round|int }}% of all
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+        <table class="sr-only">
+          <caption>Confirmed bookings per route</caption>
+          <thead><tr><th>Route</th><th>Bookings</th></tr></thead>
+          <tbody>{% for r in stats.routes %}<tr><td>{{ r.route }}</td><td>{{ r.count }}</td></tr>{% endfor %}</tbody>
+        </table>
+      {% else %}
+        <p class="muted">No bookings yet.</p>
+      {% endif %}
+    </article>
+
+    <article class="dash-card glass reveal" style="--i: 8" id="add-trip">
+      <header class="dash-card-head">
+        <div>
+          <h2>Add a trip</h2>
+          <p class="subtle">Saved to data.json and searchable straight away</p>
+        </div>
+        <span class="stat-icon tone-violet">{{ icon('plus', 18) }}</span>
+      </header>
+
+      {% if last_added %}
+        <div class="added-note">
+          {{ icon('check-circle', 18) }}
+          <span>Last added: <strong>{{ last_added.source }} → {{ last_added.destination }}</strong>, {{ last_added.date_label }} at {{ last_added.depart }}</span>
+          <a href="{{ url_for('search', source=last_added.source, destination=last_added.destination, date=last_added.date) }}">View in search {{ icon('arrow-right', 14) }}</a>
+        </div>
+      {% endif %}
+
+      <form class="trip-form" method="post" action="{{ url_for('add_trip') }}">
+        <label class="field span-2">
+          <span class="field-label">Bus</span>
+          <span class="input-wrap">{{ icon('bus', 18) }}
+            <select class="select" name="bus_id">
+              {% for bus in buses %}<option value="{{ bus.id }}" {{ 'selected' if bus.id == form.bus_id }}>{{ bus.name }} · {{ bus.type }}</option>{% endfor %}
+            </select>
+          </span>
+        </label>
+        <label class="field">
+          <span class="field-label">From</span>
+          <select class="select" name="source">{% for c in cities %}<option {{ 'selected' if c == form.source }}>{{ c }}</option>{% endfor %}</select>
+        </label>
+        <label class="field">
+          <span class="field-label">To</span>
+          <select class="select" name="destination">{% for c in cities %}<option {{ 'selected' if c == form.destination }}>{{ c }}</option>{% endfor %}</select>
+        </label>
+        <label class="field">
+          <span class="field-label">Date</span>
+          <input class="input" type="date" name="date" value="{{ form.date }}" min="{{ window.min }}" max="{{ window.max }}" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Departure</span>
+          <input class="input" type="time" name="depart" value="{{ form.depart }}" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Duration (hours)</span>
+          <input class="input" type="number" name="duration_hours" value="{{ form.duration_hours }}" min="0.5" max="24" step="0.25" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Base fare (₹)</span>
+          <input class="input" type="number" name="base_fare" value="{{ form.base_fare }}" min="100" max="10000" step="1" required>
+        </label>
+        <button class="btn btn-primary btn-block span-2" type="submit">{{ icon('plus', 18) }} Add trip</button>
+      </form>
+    </article>
+  </div>
+
+  {# ------------------------------------------------------- recent bookings #}
+  <article class="dash-card glass reveal" style="--i: 9">
+    <header class="dash-card-head">
+      <div>
+        <h2>Recent bookings</h2>
+        <p class="subtle">Latest {{ stats.recent|length }} across all passengers</p>
+      </div>
+    </header>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr><th>PNR</th><th>Lead passenger</th><th>Route</th><th>Travel</th><th>Seats</th><th class="num">Amount</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for b in stats.recent %}
+            <tr>
+              <td><a class="mono pnr-link" href="{{ url_for('booking', pnr=b.pnr) }}">{{ b.pnr }}</a></td>
+              <td>{{ b.passengers[0].name }}{% if b.passengers|length > 1 %} <span class="subtle">+{{ b.passengers|length - 1 }}</span>{% endif %}</td>
+              <td class="nowrap">{{ b.trip.source }} → {{ b.trip.destination }}</td>
+              <td class="nowrap">{{ b.trip.date_label[:11] }} · {{ b.trip.depart }}</td>
+              <td>{{ b.seats|join(', ') }}</td>
+              <td class="num mono">₹{{ b.fare.total|inr }}</td>
+              <td>
+                {% if b.status == 'Cancelled' %}<span class="badge badge-red">Cancelled</span>
+                {% elif b.upcoming %}<span class="badge badge-green">Confirmed</span>
+                {% else %}<span class="badge">Completed</span>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  {# --------------------------------------------------------------- manifests #}
+  <article class="dash-card glass reveal" style="--i: 10">
+    <header class="dash-card-head">
+      <div>
+        <h2>Trip manifests</h2>
+        <p class="subtle">Upcoming trips with BusGo passengers — open one for the conductor's list</p>
+      </div>
+    </header>
+    <div class="manifest-grid">
+      {% for t in stats.manifest_trips if not t.departed %}
+        {% if loop.index <= 9 %}
+          {% set filled = t.total_seats - t.seats_left %}
+          <a class="manifest-tile" href="{{ url_for('manifest', trip_id=t.id) }}">
+            <span class="manifest-when">{{ t.date_label[:11] }} · {{ t.depart }}</span>
+            <strong>{{ t.source }} → {{ t.destination }}</strong>
+            <span class="subtle">{{ t.bus.name }}</span>
+            <span class="meter" style="--p: {{ filled / t.total_seats }}"><span></span></span>
+            <span class="manifest-meta"><span>{{ t.busgo_pax }} BusGo pax</span><span>{{ filled }}/{{ t.total_seats }} seats</span></span>
+          </a>
+        {% endif %}
+      {% else %}
+        <p class="muted">No upcoming trips with bookings.</p>
+      {% endfor %}
+    </div>
+  </article>
+</section>
+{% endblock %}

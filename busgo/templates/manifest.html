@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_macros.html" import trip_strip %}
+{% block title %}Manifest · {{ t.source }} to {{ t.destination }}{% endblock %}
+
+{% block content %}
+<section class="container manifest-page">
+  <header class="page-head manifest-head">
+    <div>
+      <a href="{{ url_for('admin') }}" class="back-link no-print">{{ icon('arrow-left', 16) }} Dashboard</a>
+      <h1 class="page-title reveal" style="--i: 0">Passenger <span class="text-gradient">manifest</span></h1>
+    </div>
+    <button type="button" class="btn btn-ghost no-print reveal" style="--i: 1" data-print>{{ icon('printer', 18) }} Print manifest</button>
+  </header>
+
+  <div class="glass booking-trip reveal print-plain" style="--i: 1">{{ trip_strip(t) }}</div>
+
+  <div class="manifest-stats reveal" style="--i: 2">
+    <div class="glass"><strong class="mono" data-count="{{ t.total_seats }}">0</strong><span>Total seats</span></div>
+    <div class="glass"><strong class="mono" data-count="{{ m.passengers|length }}">0</strong><span>BusGo passengers</span></div>
+    <div class="glass"><strong class="mono" data-count="{{ m.other_sales }}">0</strong><span>Counter / partner sales</span></div>
+    <div class="glass"><strong class="mono" data-count="{{ t.seats_left }}">0</strong><span>Seats still free</span></div>
+  </div>
+
+  <article class="dash-card glass reveal print-plain" style="--i: 3">
+    <header class="dash-card-head">
+      <div>
+        <h2>BusGo passengers</h2>
+        <p class="subtle">In seat order · {{ t.bus.name }} ({{ t.bus.model }})</p>
+      </div>
+    </header>
+    {% if m.passengers %}
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th>Seat</th><th>Passenger</th><th>Age</th><th>Gender</th><th>Boarding</th><th>Phone</th><th>PNR</th></tr></thead>
+          <tbody>
+            {% for p in m.passengers %}
+              <tr>
+                <td><span class="seat-tag">{{ p.seat }}</span></td>
+                <td><strong>{{ p.name }}</strong></td>
+                <td>{{ p.age }}</td>
+                <td>{{ p.gender }}</td>
+                <td class="nowrap">{{ p.boarding.time }} · {{ p.boarding.name }}</td>
+                <td class="nowrap mono">{{ p.phone }}</td>
+                <td><a class="mono pnr-link" href="{{ url_for('booking', pnr=p.pnr) }}">{{ p.pnr }}</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No BusGo passengers on this trip yet.</p>
+    {% endif %}
+  </article>
+</section>
+{% endblock %}
