@@ -894,7 +894,7 @@ if __name__ == "__main__":
     results = search_buses("Bengaluru", "Goa", tomorrow)
     for t in results:
         print(f"{t['depart']} -> {t['arrive']}{' (+1)' if t['next_day'] else '':5} {t['bus']['name']:<26}"
-              f"{t['bus']['type']:<16} Rs.{format_inr(t['base_fare']):>6}  {t['seats_left']:>2} seats left")
+              f"{t['bus']['type']:<16} ₹{format_inr(t['base_fare']):>6}  {t['seats_left']:>2} seats left")
 
     trip = results[0]
     seat_map = get_seat_map(trip["id"])
@@ -915,7 +915,7 @@ if __name__ == "__main__":
     passengers = [{"seat": seats[0], "name": "aarav sharma", "age": 27, "gender": "Male"},
                   {"seat": seats[1], "name": "ananya sharma", "age": 24, "gender": "Female"}]
     ok, booking = book_seats(trip["id"], seats, passengers, user)
-    print(f"\nBOOK  ok={ok}  PNR={booking['pnr']}  total=Rs.{format_inr(booking['fare']['total'])}")
+    print(f"\nBOOK  ok={ok}  PNR={booking['pnr']}  total=₹{format_inr(booking['fare']['total'])}")
 
     ok, error = book_seats(trip["id"], seats[:1], passengers[:1], user)
     print(f"BOOK the same seat again -> ok={ok}: {error}")
@@ -933,7 +933,7 @@ if __name__ == "__main__":
     print(f"Seats free again? {all(s not in get_trip(trip['id'])['booked_seats'] for s in seats)}")
 
     stats = get_stats()
-    print(f"\nADMIN STATS  bookings={stats['bookings']}  revenue=Rs.{format_inr(stats['revenue'])}  "
+    print(f"\nADMIN STATS  bookings={stats['bookings']}  revenue=₹{format_inr(stats['revenue'])}  "
           f"occupancy={stats['occupancy']}%  today's trips={stats['todays_trips']}")
     for r in stats["routes"][:5]:
         print(f"  {r['route']:<26} {'█' * r['count']} {r['count']}")

@@ -4,9 +4,11 @@ app.py - BusGo's web routes.
 Each route only reads the request, calls a function in logic.py and shows
 the result in a template. No business rules live here.
 
-Pages still marked "placeholder" are built in later phases; the JSON
-routes (/search, /trip/<id>/seats, /booking/<pnr>) let you check the
-Python logic in the browser until then.
+Booking flow:  /  ->  /search  ->  /trip/<id>/seats  ->  /passengers  ->  /payment  ->  /booking/<pnr>
+The booking in progress is kept in the Flask session as session["draft"].
+
+Small JSON endpoints (/api/...) let the page ask Python for live numbers
+(fare, refund) without reloading.
 """
 
 from datetime import date, datetime, timedelta

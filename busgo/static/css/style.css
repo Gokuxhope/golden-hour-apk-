@@ -844,6 +844,8 @@ body.is-leaving .page { opacity: 0; transform: translateY(8px); transition: opac
   .toast-stack { right: 16px; top: calc(var(--nav-h) + 22px); }
   .footer-inner { justify-content: center; text-align: center; }
   .profiles { gap: 14px; margin-top: 28px; }
+  .login-note { text-align: center; }
+  .login-note .icon { display: none; }
   .profile {
     display: grid;
     grid-template-columns: auto 1fr auto;
@@ -1374,6 +1376,8 @@ input[type="range"]:disabled { opacity: 0.4; cursor: default; }
   .amenities li span { display: none; }
   .amenities { gap: 12px; }
   .results-title-to { gap: 10px; }
+  .results-meta .dot-sep { display: none; }
+  .results-meta { gap: 4px 14px; }
   .results-title-arrow { width: 34px; height: 34px; }
   .results-title-arrow .icon { width: 20px; height: 20px; }
   .date-chip { flex-basis: 84px; }
