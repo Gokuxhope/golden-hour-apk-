@@ -5,6 +5,8 @@ It looks and feels like a real product (glassmorphism design, smooth animations,
 every button works), but it is a **mock** — there is no real database, no real
 payment and no password security.
 
+For a walkthrough of how it was built and where each Python feature is used, see [`BUILD_GUIDE.md`](BUILD_GUIDE.md).
+
 **Python is the core of the project.** All data, business rules and validation
 live in Python (`data.py`, `logic.py`). The HTML/CSS/JavaScript only display what
 Python decides.
