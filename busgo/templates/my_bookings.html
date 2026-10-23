@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}My Bookings{% endblock %}
+
+{% macro trip_card(b, kind, quote=None, i=0) -%}
+{%- set t = b.trip -%}
+<article class="trip-card glass reveal kind-{{ kind }}" style="--i: {{ i }}" data-tilt="2">
+  <div class="trip-date">
+    <span class="trip-date-wd">{{ t.date_label[:3] }}</span>
+    <strong>{{ t.date[8:] }}</strong>
+    <span class="trip-date-mo">{{ t.date_label[8:11] }}</span>
+  </div>
+
+  <div class="trip-body">
+    <div class="trip-top">
+      <h3 class="trip-route">{{ t.source }} <span class="route-arrow">{{ icon('arrow-right', 16) }}</span> {{ t.destination }}</h3>
+      {% if kind == 'cancelled' %}
+        <span class="badge badge-red">{{ icon('x', 12) }} Cancelled</span>
+      {% elif kind == 'past' %}
+        <span class="badge">{{ icon('check', 12) }} Completed</span>
+      {% else %}
+        <span class="badge badge-green">{{ icon('check', 12) }} Confirmed</span>
+        {% if b.departs_in %}<span class="badge badge-cyan">{{ icon('clock', 12) }} in {{ b.departs_in }}</span>{% endif %}
+      {% endif %}
+    </div>
+    <p class="trip-meta">
+      <strong>{{ t.depart }}</strong> → <strong>{{ t.arrive }}{% if t.next_day %}<sup>+1</sup>{% endif %}</strong>
+      <span class="dot-sep"></span> {{ t.bus.name }} <span class="dot-sep"></span> {{ t.bus.type }}
+    </p>
+    <div class="trip-seats">
+      {% for s in b.seats %}<span class="seat-tag">{{ s }}</span>{% endfor %}
+      <span class="trip-pnr mono">PNR {{ b.pnr }}</span>
+      <span class="subtle trip-pax">{{ b.passengers|map(attribute='name')|join(', ') }}</span>
+    </div>
+  </div>
+
+  <div class="trip-side">
+    <div class="trip-amount">
+      {% if kind == 'cancelled' and b.refund %}
+        <span class="subtle">Refunded ({{ b.refund.percent }}%)</span>
+        <strong class="refund-amt">₹{{ b.refund.amount|inr }}</strong>
+        <span class="subtle strike">₹{{ b.fare.total|inr }}</span>
+      {% else %}
+        <span class="subtle">{{ b.fare.seat_count }} seat{{ 's' if b.fare.seat_count != 1 }}</span>
+        <strong>₹{{ b.fare.total|inr }}</strong>
+      {% endif %}
+    </div>
+    <div class="trip-actions">
+      <a href="{{ url_for('booking', pnr=b.pnr) }}" class="btn btn-ghost btn-sm">{{ icon('ticket', 15) }} Ticket</a>
+      {% if kind == 'upcoming' %}
+        {% if quote and quote.ok %}
+          <button type="button" class="btn btn-sm btn-cancel" data-cancel="{{ b.pnr }}"
+                  data-refund-url="{{ url_for('api_refund', pnr=b.pnr) }}" data-cancel-url="{{ url_for('cancel', pnr=b.pnr) }}">
+            {{ icon('undo', 15) }} Cancel
+          </button>
+        {% else %}
+          <span class="closed-note subtle" title="{{ quote.message if quote }}">{{ icon('lock', 13) }} Cancellation closed</span>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</article>
+{%- endmacro %}
+
+{% block content %}
+<section class="container bookings-page">
+  <header class="page-head bookings-head">
+    <div>
+      <h1 class="page-title reveal" style="--i: 0">My <span class="text-gradient">Bookings</span></h1>
+      <p class="page-sub reveal" style="--i: 1">Your trips, tickets and refunds — cancel up to 6 hours before departure.</p>
+    </div>
+    <a href="{{ url_for('index') }}" class="btn btn-primary reveal" style="--i: 2">{{ icon('plus', 18) }} New booking</a>
+  </header>
+
+  {% set labels = {'upcoming': 'Upcoming', 'past': 'Past', 'cancelled': 'Cancelled'} %}
+  <div class="tabs reveal" style="--i: 2" role="tablist" data-underline-tabs>
+    {% for key in ['upcoming', 'past', 'cancelled'] %}
+      <button type="button" role="tab" class="tab {{ 'is-on' if key == active }}" data-tab-target="{{ key }}"
+              aria-selected="{{ 'true' if key == active else 'false' }}" aria-controls="tab-{{ key }}">
+        {{ labels[key] }} <span class="tab-count">{{ tabs[key]|length }}</span>
+      </button>
+    {% endfor %}
+    <span class="tab-underline" aria-hidden="true"></span>
+  </div>
+
+  {% for key in ['upcoming', 'past', 'cancelled'] %}
+    <div class="tab-panel" id="tab-{{ key }}" role="tabpanel" data-tab-panel="{{ key }}" {% if key != active %}hidden{% endif %}>
+      {% for b in tabs[key] %}
+        {{ trip_card(b, key, quotes.get(b.pnr), loop.index + 2) }}
+      {% else %}
+        <div class="state glass empty-card reveal" style="--i: 3">
+          <div class="state-icon">{{ icon({'upcoming': 'bus', 'past': 'clock', 'cancelled': 'undo'}[key], 32) }}</div>
+          <h2>{{ {'upcoming': 'No upcoming trips', 'past': 'No past trips yet', 'cancelled': 'Nothing cancelled'}[key] }}</h2>
+          <p class="muted">{{ {'upcoming': 'Your next adventure is one search away.', 'past': 'Completed journeys will show up here.', 'cancelled': "Cancelled bookings and their refunds appear here."}[key] }}</p>
+          {% if key == 'upcoming' %}<a href="{{ url_for('index') }}" class="btn btn-primary">{{ icon('search', 18) }} Find a bus</a>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+</section>
+
+{# ---- Cancel modal (amounts come from /api/refund/<pnr>, i.e. Python) ---- #}
+<div class="modal" data-modal hidden>
+  <div class="modal-backdrop" data-modal-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cancel-title" tabindex="-1">
+    <button type="button" class="modal-x" data-modal-close aria-label="Close">{{ icon('x', 18) }}</button>
+    <div class="modal-icon">{{ icon('undo', 26) }}</div>
+    <h2 id="cancel-title">Cancel this booking?</h2>
+    <p class="muted modal-route" data-m-route>&nbsp;</p>
+
+    <div class="refund-box" data-m-body>
+      <div class="refund-main">
+        <span class="subtle">You get back</span>
+        <strong class="refund-big">₹<span data-m-refund data-current="0">0</span></strong>
+        <span class="badge badge-green" data-m-percent>—</span>
+      </div>
+      <dl class="fare-rows refund-rows">
+        <div><dt>Amount paid</dt><dd>₹<span data-m-total>0</span></dd></div>
+        <div><dt>Cancellation charge</dt><dd>− ₹<span data-m-deduction>0</span></dd></div>
+        <div><dt>Time to departure</dt><dd data-m-hours>—</dd></div>
+      </dl>
+    </div>
+
+    <ol class="policy" aria-label="Refund policy">
+      <li data-tier="90"><span>More than 24 hours before</span><strong>90% refund</strong></li>
+      <li data-tier="50"><span>6 to 24 hours before</span><strong>50% refund</strong></li>
+      <li data-tier="0"><span>Less than 6 hours before</span><strong>Not allowed</strong></li>
+    </ol>
+    <p class="modal-blocked" data-m-blocked hidden></p>
+
+    <form method="post" class="modal-actions" data-m-form>
+      <button type="button" class="btn btn-ghost" data-modal-close>Keep booking</button>
+      <button type="submit" class="btn btn-danger" data-m-confirm disabled>{{ icon('undo', 16) }} Yes, cancel</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

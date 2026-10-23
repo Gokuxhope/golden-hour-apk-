@@ -318,20 +318,62 @@ def booking(pnr):
     return render_template("success.html", b=logic.booking_view(found), celebrate=celebrate)
 
 
+def can_manage(booking):
+    """Only the passenger who booked (or the admin) may cancel a booking."""
+    user = current_user()
+    return bool(user) and (booking["user_id"] == user["id"] or user["role"] == "admin")
+
+
 @app.route("/my-bookings")
 @login_required
 def my_bookings():
-    return render_template("placeholder.html", title="My Bookings", phase="Phase 7", page_icon="list")
-
-
-@app.route("/pnr")
-def pnr_status():
-    return render_template("placeholder.html", title="PNR Status", phase="Phase 7", page_icon="ticket")
+    tabs = logic.get_user_bookings(current_user()["id"])
+    active = request.args.get("tab", "upcoming")
+    if active not in tabs:
+        active = "upcoming"
+    return render_template("my_bookings.html", tabs=tabs, active=active,
+                           quotes={b["pnr"]: logic.refund_quote(b["pnr"]) for b in tabs["upcoming"]})
 
 
 @app.route("/api/refund/<pnr>")
 def api_refund(pnr):
-    return jsonify(logic.refund_quote(pnr))
+    """Refund quote for the cancel modal: the amount is worked out by Python, not JavaScript."""
+    booking = logic.get_booking(pnr)
+    if not booking or not can_manage(booking):
+        return jsonify(ok=False, message="Booking not found."), 404
+    quote = logic.refund_quote(pnr)
+    trip = logic.trip_view(logic.get_trip(booking["trip_id"]))
+    quote.update(route=f"{trip['source']} → {trip['destination']}", date=trip["date_label"],
+                 depart=trip["depart"], seats=booking["seats"], departs_in=logic.time_until(trip))
+    return jsonify(quote)
+
+
+@app.route("/booking/<pnr>/cancel", methods=["POST"])
+@login_required
+def cancel(pnr):
+    booking = logic.get_booking(pnr)
+    if not booking or not can_manage(booking):
+        flash("Booking not found.", "error")
+        return redirect(url_for("my_bookings"))
+    ok, message, _quote = logic.cancel_booking(pnr)
+    flash(message, "success" if ok else "error")
+    return redirect(url_for("my_bookings", tab="cancelled" if ok else "upcoming"))
+
+
+@app.route("/pnr")
+def pnr_status():
+    """Look up any ticket by PNR — no login needed."""
+    query = request.args.get("pnr", "").strip().upper()
+    found = logic.get_booking(query) if query else None
+    if query and not found:
+        flash(f"No booking found with PNR {query}. Check the code and try again.", "error")
+    user = current_user()
+    recent = []
+    if user:
+        mine = [b for b in logic.db["bookings"].values() if b["user_id"] == user["id"]]
+        recent = [b["pnr"] for b in sorted(mine, key=lambda b: b["booked_at"], reverse=True)[:4]]
+    return render_template("pnr.html", query=query, b=logic.booking_view(found) if found else None,
+                           not_found=bool(query and not found), recent=recent)
 
 
 @app.route("/admin")

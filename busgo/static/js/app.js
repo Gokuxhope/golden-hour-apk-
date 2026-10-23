@@ -702,6 +702,131 @@
     requestAnimationFrame(frame);
   }
 
+  /* -------------------------------------------- tabs with sliding underline */
+  $all("[data-underline-tabs]").forEach(function (bar) {
+    var tabsEls = $all("[data-tab-target]", bar);
+    var line = $(".tab-underline", bar);
+
+    // The underline is 100px wide; move and stretch it with transform only.
+    function moveLine(tab, instant) {
+      if (instant) line.style.transition = "none";
+      line.style.transform = "translateX(" + tab.offsetLeft + "px) scaleX(" + tab.offsetWidth / 100 + ")";
+      if (instant) { void line.offsetWidth; line.style.transition = ""; }
+    }
+
+    function show(tab) {
+      tabsEls.forEach(function (t) {
+        var on = t === tab;
+        t.classList.toggle("is-on", on);
+        t.setAttribute("aria-selected", String(on));
+      });
+      $all("[data-tab-panel]").forEach(function (panel) {
+        var on = panel.dataset.tabPanel === tab.dataset.tabTarget;
+        panel.hidden = !on;
+        if (on) {
+          $all(".reveal", panel).forEach(function (el, i) { el.style.setProperty("--i", i); replay(el, "reveal"); });
+        }
+      });
+      moveLine(tab);
+      var url = new URL(location.href);
+      url.searchParams.set("tab", tab.dataset.tabTarget);
+      history.replaceState(null, "", url);
+    }
+
+    tabsEls.forEach(function (tab) { tab.addEventListener("click", function () { show(tab); }); });
+    var current = $(".tab.is-on", bar) || tabsEls[0];
+    moveLine(current, true);
+    window.addEventListener("resize", function () { moveLine($(".tab.is-on", bar), true); });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { moveLine($(".tab.is-on", bar), true); });
+  });
+
+  /* ---------------------------------------------------------- cancel modal */
+  var modal = $("[data-modal]");
+  if (modal) {
+    var card = $(".modal-card", modal);
+    var lastTrigger = null;
+    var mEl = function (name) { return $("[data-m-" + name + "]", modal); };
+
+    function openModal(trigger) {
+      lastTrigger = trigger;
+      modal.hidden = false;
+      document.body.classList.add("modal-open");
+      void modal.offsetWidth;
+      modal.classList.add("is-open");
+      card.focus();
+
+      // Reset, then ask Python for the refund quote.
+      mEl("route").textContent = "Checking refund…";
+      mEl("body").classList.add("is-loading");
+      mEl("blocked").hidden = true;
+      mEl("confirm").disabled = true;
+      mEl("refund").dataset.current = "0";
+      mEl("refund").textContent = "0";
+      $all(".policy li", modal).forEach(function (li) { li.classList.remove("is-active"); });
+      mEl("form").action = trigger.dataset.cancelUrl;
+
+      fetch(trigger.dataset.refundUrl)
+        .then(function (r) { return r.json(); })
+        .then(function (q) {
+          mEl("body").classList.remove("is-loading");
+          mEl("route").textContent = (q.route || "") + " · " + (q.date || "") + " · " + (q.depart || "") + " · Seats " + (q.seats || []).join(", ");
+          mEl("total").textContent = inrFormatter.format(q.total || 0);
+          mEl("hours").textContent = q.departs_in || "Departed";
+          var tier = q.percent === 90 ? "90" : q.percent === 50 ? "50" : "0";
+          var active = $('.policy li[data-tier="' + tier + '"]', modal);
+          if (active) active.classList.add("is-active");
+          if (q.ok) {
+            mEl("percent").textContent = q.percent + "% refund";
+            mEl("deduction").textContent = inrFormatter.format(q.deduction);
+            animateNumber(mEl("refund"), q.refund, 900);
+            mEl("confirm").disabled = false;
+          } else {
+            mEl("percent").textContent = "No refund";
+            mEl("deduction").textContent = inrFormatter.format(q.total || 0);
+            mEl("blocked").textContent = q.message;
+            mEl("blocked").hidden = false;
+          }
+        })
+        .catch(function () { toast("Couldn't load the refund details.", "error"); closeModal(); });
+    }
+
+    function closeModal() {
+      modal.classList.remove("is-open");
+      document.body.classList.remove("modal-open");
+      setTimeout(function () { modal.hidden = true; }, reduceMotion ? 0 : 260);
+      if (lastTrigger) lastTrigger.focus();
+    }
+
+    $all("[data-cancel]").forEach(function (btn) {
+      btn.addEventListener("click", function () { openModal(btn); });
+    });
+    $all("[data-modal-close]", modal).forEach(function (el) { el.addEventListener("click", closeModal); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !modal.hidden) closeModal();
+      // keep Tab focus inside the dialog
+      if (e.key === "Tab" && !modal.hidden) {
+        var focusables = $all("button:not([disabled]), a[href]", card);
+        var first = focusables[0], last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    });
+    mEl("form").addEventListener("submit", function () {
+      mEl("confirm").classList.add("is-busy");
+      mEl("confirm").innerHTML = '<span class="spinner"></span> Cancelling…';
+    });
+  }
+
+  /* -------------------------------------------------------------- PNR input */
+  var pnrInput = $("[data-pnr-input]");
+  if (pnrInput) {
+    pnrInput.addEventListener("input", function () {
+      var pos = pnrInput.selectionStart;
+      pnrInput.value = pnrInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      pnrInput.setSelectionRange(pos, pos);
+    });
+  }
+
   // Restart a one-shot CSS animation class (bounce, shake...).
   function replay(el, cls) {
     el.classList.remove(cls);

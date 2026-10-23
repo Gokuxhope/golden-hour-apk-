@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_ticket.html" import ticket %}
+{% block title %}{{ 'PNR ' ~ b.pnr if b else 'PNR Status' }}{% endblock %}
+
+{% block content %}
+<section class="container pnr-page">
+  <header class="hero pnr-hero">
+    <span class="eyebrow reveal" style="--i: 0"><span class="dot">{{ icon('ticket', 13) }}</span>No login needed</span>
+    <h1 class="page-title reveal" style="--i: 1">Check your <span class="text-gradient">PNR status</span></h1>
+    <p class="page-sub reveal" style="--i: 2">Enter the 10-character code from your ticket, e.g. BG7K29XQ1M.</p>
+  </header>
+
+  <form class="pnr-form glass reveal {{ 'is-shake' if not_found }}" style="--i: 3" method="get" action="{{ url_for('pnr_status') }}">
+    <span class="input-wrap pnr-input-wrap">
+      {{ icon('ticket', 22) }}
+      <input class="input pnr-input" name="pnr" value="{{ query }}" placeholder="BG••••••••" maxlength="10" minlength="10"
+             autocomplete="off" autocapitalize="characters" spellcheck="false" required aria-label="PNR number" data-pnr-input>
+    </span>
+    <button class="btn btn-primary btn-lg" type="submit">{{ icon('search', 18) }} Check status</button>
+  </form>
+
+  {% if recent %}
+    <div class="chips pnr-recent reveal" style="--i: 4">
+      <span class="subtle">Your recent PNRs</span>
+      {% for p in recent %}
+        <a class="route-chip mono" href="{{ url_for('pnr_status', pnr=p) }}">{{ p }}</a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if b %}
+    {% set t = b.trip %}
+    <div class="status-banner glass reveal status-{{ 'cancelled' if b.status == 'Cancelled' else ('upcoming' if b.upcoming else 'done') }}" style="--i: 5">
+      <span class="status-icon">{{ icon('x' if b.status == 'Cancelled' else ('check-circle' if b.upcoming else 'clock'), 24) }}</span>
+      <div>
+        {% if b.status == 'Cancelled' %}
+          <strong>Booking cancelled</strong>
+          <span class="muted">Refund of ₹{{ b.refund.amount|inr }} ({{ b.refund.percent }}%) issued on {{ b.cancelled_at|nice_date }}.</span>
+        {% elif b.upcoming %}
+          <strong>Confirmed · departs in {{ b.departs_in }}</strong>
+          <span class="muted">{{ t.source }} → {{ t.destination }} on {{ t.date_label }} at {{ t.depart }} from {{ b.boarding.name }}.</span>
+        {% else %}
+          <strong>Journey completed</strong>
+          <span class="muted">{{ t.source }} → {{ t.destination }} on {{ t.date_label }}. Hope it was a good one!</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ticket-wrap reveal" style="--i: 6">{{ ticket(b) }}</div>
+    <div class="ticket-actions no-print reveal" style="--i: 7">
+      <button type="button" class="btn btn-primary" data-print>{{ icon('printer', 18) }} Print ticket</button>
+      {% if current_user and (current_user.id == b.user_id or current_user.role == 'admin') %}
+        <a href="{{ url_for('my_bookings') }}" class="btn btn-ghost">{{ icon('list', 18) }} My Bookings</a>
+      {% endif %}
+    </div>
+  {% elif not_found %}
+    <div class="state glass empty-card reveal" style="--i: 5">
+      <div class="state-icon">{{ icon('search', 30) }}</div>
+      <h2>We couldn't find {{ query }}</h2>
+      <p class="muted">PNRs start with BG and have 10 letters and numbers. You'll find yours on the ticket or in My Bookings.</p>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

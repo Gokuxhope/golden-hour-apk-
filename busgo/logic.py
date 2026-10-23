@@ -566,12 +566,28 @@ def qr_matrix(text, size=21):
     return grid
 
 
+def time_until(trip, now=None):
+    """Friendly countdown to departure, e.g. "2 days 4 hrs" or "45 min". None if it has left."""
+    seconds = (departure_time(trip) - (now or datetime.now())).total_seconds()
+    if seconds <= 0:
+        return None
+    days, rest = divmod(int(seconds), 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes = rest // 60
+    if days:
+        return f"{days} day{'s' if days > 1 else ''} {hours} hr{'s' if hours != 1 else ''}"
+    if hours:
+        return f"{hours} hr{'s' if hours != 1 else ''} {minutes} min"
+    return f"{max(minutes, 1)} min"
+
+
 def booking_view(booking, now=None):
-    """A booking together with its trip details and whether it is upcoming."""
+    """A booking together with its trip details, whether it is upcoming and the time left."""
     trip = get_trip(booking["trip_id"])
     view = dict(booking)
     view["trip"] = trip_view(trip, now)
     view["upcoming"] = not view["trip"]["departed"]
+    view["departs_in"] = time_until(trip, now)
     return view
 
 
@@ -629,7 +645,7 @@ def refund_quote(pnr, now=None):
         return dict(quote, ok=False, message="Cancellation closes 6 hours before departure.")
     refund = round(total * percent / 100)
     return dict(quote, ok=True, refund=refund, deduction=total - refund,
-                message=f"You will get {percent}% back: Rs. {format_inr(refund)}")
+                message=f"You will get {percent}% back: ₹{format_inr(refund)}")
 
 
 def cancel_booking(pnr, now=None):
@@ -649,7 +665,7 @@ def cancel_booking(pnr, now=None):
     booking["cancelled_at"] = now.isoformat(timespec="seconds")
     booking["refund"] = {"percent": quote["percent"], "amount": quote["refund"]}
     _save()
-    return True, f"Booking {booking['pnr']} cancelled. Rs. {format_inr(quote['refund'])} will be refunded.", quote
+    return True, f"Booking {booking['pnr']} cancelled. ₹{format_inr(quote['refund'])} will be refunded.", quote
 
 
 # ---------------------------------------------------------------------------
@@ -762,7 +778,7 @@ def add_trip(form, now=None):
     if not 30 <= duration_min <= 24 * 60:
         return False, "Duration must be between 0.5 and 24 hours.", None
     if not 100 <= fare <= 10000:
-        return False, "Fare must be between Rs. 100 and Rs. 10,000.", None
+        return False, "Fare must be between ₹100 and ₹10,000.", None
 
     trip_id = f"{data.CITIES[source]['code']}-{data.CITIES[destination]['code']}-{day:%Y%m%d}-{depart.replace(':', '')}"
     base_id, n = trip_id, 2

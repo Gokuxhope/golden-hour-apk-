@@ -2141,3 +2141,257 @@ fieldset.field legend { padding: 0; margin-bottom: 8px; }
   .ticket-pax td, .ticket-facts, .fare-rows, .fare-total { border-color: #ccc !important; }
   .logo-mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ==========================================================================
+   Phase 7 — My Bookings, cancel modal, PNR status
+   ========================================================================== */
+
+/* ---- Header + tabs ---- */
+.bookings-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.tabs {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--glass-border-soft);
+  margin-bottom: 22px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 16px;
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-3);
+  transition: color var(--t);
+}
+.tab:hover { color: var(--text-2); }
+.tab.is-on { color: var(--text); }
+.tab-count {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  background: var(--glass-bg);
+  color: var(--text-2);
+  transition: background-color var(--t), color var(--t);
+}
+.tab.is-on .tab-count { background: rgba(139, 92, 246, 0.35); color: #fff; }
+.tab-underline {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100px;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--violet), var(--cyan));
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.7);
+  transform-origin: left center;
+  transition: transform 460ms var(--ease-spring);
+}
+
+/* ---- Trip cards ---- */
+.tab-panel { display: flex; flex-direction: column; gap: 14px; }
+.trip-card {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  padding: 18px 20px;
+  border-radius: 22px;
+}
+.trip-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 84px;
+  border-radius: 18px;
+  background: linear-gradient(160deg, rgba(139, 92, 246, 0.35), rgba(34, 211, 238, 0.15));
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.35);
+  line-height: 1.1;
+}
+.trip-date strong { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; }
+.trip-date-wd,
+.trip-date-mo { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-2); }
+.kind-past .trip-date,
+.kind-cancelled .trip-date { background: var(--glass-bg-soft); box-shadow: inset 0 0 0 1px var(--glass-border-soft); }
+.kind-cancelled .trip-route,
+.kind-cancelled .trip-meta { opacity: 0.6; }
+.trip-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.trip-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
+.trip-route { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; margin-right: 4px; }
+.trip-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 14px; color: var(--text-2); }
+.trip-meta strong { color: var(--text); }
+.trip-meta sup { color: var(--amber); font-size: 10px; }
+.trip-seats { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 2px; }
+.trip-pnr { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-2); padding: 3px 8px; border-radius: 8px; background: var(--glass-bg-soft); }
+.trip-pax { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+.trip-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.trip-amount { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.trip-amount .subtle { font-size: 12px; }
+.trip-amount strong { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.refund-amt { color: #6ee7b7; }
+.strike { text-decoration: line-through; }
+.trip-actions { display: flex; gap: 8px; align-items: center; }
+.btn-cancel { color: #fecdd3; background: rgba(251, 113, 133, 0.12); border: 1px solid rgba(251, 113, 133, 0.4); }
+.btn-cancel:hover { background: rgba(251, 113, 133, 0.22); }
+.closed-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+
+/* ---- Modal ---- */
+body.modal-open { overflow: hidden; }
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 4, 22, 0.62);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 260ms var(--ease-out);
+}
+.modal-card {
+  position: relative;
+  width: min(480px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  padding: 28px;
+  border-radius: 26px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(40, 31, 92, 0.9), rgba(24, 19, 60, 0.94));
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.9), var(--glass-highlight);
+  outline: none;
+  opacity: 0;
+  transform: translateY(18px) scale(0.94);
+  transition: opacity 260ms var(--ease-out), transform 420ms var(--ease-spring);
+}
+.modal.is-open .modal-backdrop { opacity: 1; }
+.modal.is-open .modal-card { opacity: 1; transform: none; }
+.modal-x { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; color: var(--text-3); transition: background-color var(--t), color var(--t); }
+.modal-x:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+.modal-icon {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 14px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  color: #fecdd3;
+  background: rgba(251, 113, 133, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(251, 113, 133, 0.4);
+}
+.modal-card h2 { font-size: 22px; }
+.modal-route { margin-top: 6px; font-size: 14px; }
+.refund-box { margin-top: 20px; padding: 18px; border-radius: 18px; background: rgba(10, 8, 35, 0.35); border: 1px solid var(--glass-border-soft); text-align: left; transition: opacity var(--t); }
+.refund-box.is-loading { opacity: 0.4; }
+.refund-main { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-bottom: 14px; }
+.refund-main .subtle { font-size: 13px; }
+.refund-big {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: #6ee7b7;
+}
+.refund-rows { padding-top: 14px; }
+.policy { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 6px; text-align: left; }
+.policy li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--text-3);
+  border: 1px solid transparent;
+  transition: background-color var(--t), border-color var(--t), color var(--t);
+}
+.policy li strong { color: var(--text-2); }
+.policy li.is-active { color: var(--text); background: rgba(52, 211, 153, 0.12); border-color: rgba(52, 211, 153, 0.4); }
+.policy li.is-active strong { color: #6ee7b7; }
+.policy li[data-tier="0"].is-active { background: rgba(251, 113, 133, 0.12); border-color: rgba(251, 113, 133, 0.4); }
+.policy li[data-tier="0"].is-active strong { color: #fecdd3; }
+.modal-blocked { margin-top: 14px; font-size: 14px; color: #fecdd3; }
+.modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 22px; }
+
+/* ---- PNR status ---- */
+.pnr-hero { gap: 14px; }
+.pnr-form {
+  display: flex;
+  gap: 12px;
+  max-width: 640px;
+  margin: 32px auto 0;
+  padding: 12px;
+  border-radius: 24px;
+}
+.pnr-input-wrap { flex: 1; }
+.pnr-input {
+  min-height: 56px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+.pnr-input::placeholder { letter-spacing: 0.2em; }
+.pnr-input-wrap > .icon ~ .pnr-input { padding-left: 52px; }
+.pnr-recent { align-items: center; margin-top: 18px; font-size: 13px; }
+.pnr-recent .route-chip { padding: 8px 14px; font-size: 13px; letter-spacing: 0.06em; }
+.status-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 1000px;
+  margin: 32px auto 0;
+  padding: 18px 22px;
+  border-radius: 20px;
+}
+.status-banner > div { display: flex; flex-direction: column; gap: 2px; }
+.status-banner strong { font-size: 17px; }
+.status-banner .muted { font-size: 14px; }
+.status-icon { width: 48px; height: 48px; flex-shrink: 0; display: grid; place-items: center; border-radius: 15px; }
+.status-upcoming .status-icon { color: #6ee7b7; background: rgba(52, 211, 153, 0.15); box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.4); }
+.status-done .status-icon { color: var(--text-2); background: var(--glass-bg); }
+.status-cancelled .status-icon { color: #fecdd3; background: rgba(251, 113, 133, 0.15); box-shadow: inset 0 0 0 1px rgba(251, 113, 133, 0.4); }
+.pnr-page .ticket-wrap { margin-top: 18px; }
+.pnr-page .empty-card { margin-left: auto; margin-right: auto; }
+
+/* ---- Phase 7 responsive ---- */
+@media (max-width: 760px) {
+  .trip-card { grid-template-columns: 64px minmax(0, 1fr); gap: 14px 16px; padding: 16px; align-items: start; }
+  .tab { padding: 0 12px; font-size: 14px; gap: 6px; }
+  .trip-date { height: 72px; border-radius: 16px; }
+  .trip-date strong { font-size: 24px; }
+  .trip-side { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--glass-border-soft); }
+  .trip-amount { align-items: flex-start; }
+  .trip-route { font-size: 16px; }
+  .trip-pax { max-width: 100%; flex-basis: 100%; }
+  .pnr-form { flex-direction: column; }
+  .pnr-input { font-size: 17px; letter-spacing: 0.14em; }
+}
+@media (max-width: 420px) {
+  .modal-card { padding: 24px 18px; }
+  .modal-actions { grid-template-columns: 1fr; }
+  .modal-actions .btn-danger { order: -1; }
+  .refund-big { font-size: 34px; }
+}
