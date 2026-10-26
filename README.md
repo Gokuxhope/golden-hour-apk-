@@ -103,7 +103,7 @@ Open `www/index.html` in any browser. It starts in demo mode.
 
 ### Prerequisites for development
 
-- Node.js 20 or newer
+- Node.js 22 (jsdom 30 and Capacitor 8 need it)
 - For a local APK build: JDK 21 and the Android SDK (platform 36)
 
 ```bash
